@@ -1,0 +1,16 @@
+import reactLogo from './assets/react.svg'
+import viteLogo from '/vite.svg'
+import './App.css'
+
+function App() {
+
+  return (
+    <>
+      <h1>Ping-Pong Tracker</h1>
+      <h2>Frontend ready</h2>
+      
+    </>
+  )
+}
+
+export default App
