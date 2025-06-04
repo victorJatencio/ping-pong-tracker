@@ -1,15 +1,30 @@
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
+import { Container, Row, Col, Button } from 'react-bootstrap'
 import './App.css'
+
+
+import DashboardPage from './pages/Dashboard'
+import HistoryPage from './pages/History'
+import LeaderBoard from './pages/Leaderboard'
+import MatchDetail from './pages/MatchDetail'
+import Profile from './pages/Profile'
+
 
 function App() {
 
   return (
-    <>
-      <h1>Ping-Pong Tracker</h1>
-      <h2>Frontend ready</h2>
-      
-    </>
+    <Container>
+      <Row className='my-4'>
+        <Col>
+          <DashboardPage></DashboardPage>
+          <HistoryPage></HistoryPage>
+          <LeaderBoard></LeaderBoard>
+          <MatchDetail></MatchDetail>
+          <Profile></Profile>
+        </Col>
+      </Row>
+    </Container>
   )
 }
 
