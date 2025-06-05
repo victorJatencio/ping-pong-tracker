@@ -1,16 +1,20 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Container } from 'react-bootstrap';
 import Navigation from '../../components/common/Navbar';
 import TabNavigation from '../../components/common/TabNavigation';
 
 const MainLayout = () => {
+    const location = useLocation(); // Add this hook to get current locationconst location = useLocation();
+
     return (
         <div className="d-flex flex-column min-vh-100">
             <Navigation />
             <TabNavigation />
             <Container className="flex-grow-1 py-4">
-                <Outlet />
+                <div key={location.pathname}>
+                    <Outlet />
+                </div>
             </Container>
             <footer className="bg-light py-3 border-top">
                 <Container className="text-center text-muted">
@@ -21,4 +25,4 @@ const MainLayout = () => {
     );
 };
 
-export default MainLayout;
+export default React.memo(MainLayout);

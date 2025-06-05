@@ -7,12 +7,20 @@ const TabNavigation = () => {
 
     // Define tabs with their routes and labels
     const tabs = [
-        { path: '/dasboard', label: 'Dashboard'},
+        { path: '/dashboard', label: 'Dashboard'},
         { path: '/matches', label: 'Matches'},
         { path: '/leaderboard', label: 'Leaderboard'},
         { path: '/history', label: 'History'},
         { path: '/profile', label: 'Profile'},
     ];
+
+    // Prevent navigation if already on the same route
+    const handleTabClick = (e, path) => {
+        if (location.pathname === path) {
+            e.preventDefault();
+            return false;
+        }
+    };
 
     return (
         <Container fluid className="border-bottom bg-white">
@@ -23,6 +31,7 @@ const TabNavigation = () => {
                          <Nav.Link
                              as={NavLink}
                              to={tab.path}
+                             onClick={(e) => handleTabClick(e, tab.path)}
                              end 
                              >
                              {tab.label}
@@ -35,4 +44,4 @@ const TabNavigation = () => {
     );
 };
 
-export default TabNavigation;
+export default React.memo(TabNavigation);

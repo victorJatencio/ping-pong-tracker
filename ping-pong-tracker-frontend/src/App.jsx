@@ -1,8 +1,8 @@
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import AuthLayout from './layout/AuthLayout';
-import MainLayout from './layout/MainLayout';
+import AuthLayout from './layouts/AuthLayout';
+import MainLayout from './layouts/MainLayout';
 
 // import './App.css'
 
