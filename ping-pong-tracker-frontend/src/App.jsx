@@ -14,7 +14,7 @@ import RegisterPage from './pages/Register';
 // Main app pages
 import DashboardPage from './pages/Dashboard';
 import MatchesPage from './pages/Matches';
-import LeaderBoard from './pages/Leaderboard';
+import LeaderboardPage from './pages/Leaderboard';
 import HistoryPage from './pages/History';
 import ProfilePage from './pages/Profile';
 
@@ -36,7 +36,7 @@ function App() {
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/matches" element={<MatchesPage />} />
-            <Route path="/leaderboard" element={<LeaderBoard />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

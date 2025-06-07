@@ -5,7 +5,7 @@ import Navigation from '../../components/common/Navbar';
 import TabNavigation from '../../components/common/TabNavigation';
 
 const MainLayout = () => {
-    const location = useLocation(); // Add this hook to get current locationconst location = useLocation();
+    const location = useLocation();
 
     return (
         <div className="d-flex flex-column min-vh-100">
