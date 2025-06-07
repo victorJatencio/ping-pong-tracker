@@ -32,26 +32,34 @@ export const AuthProvider = ({ children }) => {
   // Register a new user
   const register = async (name, email, password) => {
     try {
+      console.log("AuthContext: Starting registration for:", email);
       if (isMounted.current) setError(null);
       
       // Create user in Firebase Authentication
+      console.log("AuthContext: Creating user in Firebase Auth...");
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      console.log("AuthContext: User created successfully:", userCredential.user.uid);
       
       // Update user profile with name
+      console.log("AuthContext: Updating user profile...");
       await updateProfile(userCredential.user, {
         displayName: name
       });
+      console.log("AuthContext: Profile updated successfully");
       
       // Create user document in Firestore
+      console.log("AuthContext: Creating user document in Firestore...");
       await setDoc(doc(db, "users", userCredential.user.uid), {
         name,
         email,
         useDefaultAvatar: true, // Default avatar setting
         createdAt: serverTimestamp()
       });
+      console.log("AuthContext: User document created successfully");
       
       return userCredential.user;
     } catch (error) {
+      console.error("AuthContext: Registration failed:", error);
       if (isMounted.current) setError(error.message);
       throw error;
     }
@@ -60,11 +68,19 @@ export const AuthProvider = ({ children }) => {
   // Login existing user
   const login = async (email, password) => {
     try {
+      console.log("AuthContext: Starting login for:", email);
       if (isMounted.current) setError(null);
       
+      console.log("AuthContext: Calling signInWithEmailAndPassword...");
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log("AuthContext: Login successful, user:", userCredential.user.uid);
+      console.log("AuthContext: User email verified:", userCredential.user.emailVerified);
+
       return userCredential.user;
     } catch (error) {
+      console.error("AuthContext: Login failed:", error);
+      console.error("AuthContext: Error code:", error.code);
+      console.error("AuthContext: Error message:", error.message);
       if (isMounted.current) setError(error.message);
       throw error;
     }
@@ -73,10 +89,13 @@ export const AuthProvider = ({ children }) => {
   // Logout user
   const logout = async () => {
     try {
+      console.log("AuthContext: Starting logout...");
       if (isMounted.current) setError(null);
       
       await signOut(auth);
+      console.log("AuthContext: Logout successful");
     } catch (error) {
+      console.error("AuthContext: Logout failed:", error);
       if (isMounted.current) setError(error.message);
       throw error;
     }
@@ -85,10 +104,13 @@ export const AuthProvider = ({ children }) => {
   // Reset password
   const resetPassword = async (email) => {
     try {
+      console.log("AuthContext: Starting password reset for:", email);
       if (isMounted.current) setError(null);
       
       await sendPasswordResetEmail(auth, email);
+      console.log("AuthContext: Password reset email sent");
     } catch (error) {
+      console.error("AuthContext: Password reset failed:", error);
       if (isMounted.current) setError(error.message);
       throw error;
     }
@@ -97,6 +119,7 @@ export const AuthProvider = ({ children }) => {
   // Update user profile
   const updateUserProfile = async (profileData) => {
     try {
+      console.log("AuthContext: Starting profile update...");
       if (isMounted.current) setError(null);
       
       if (!currentUser) {
@@ -117,8 +140,10 @@ export const AuthProvider = ({ children }) => {
         setCurrentUser({ ...currentUser });
       }
       
+      console.log("AuthContext: Profile update successful");
       return true;
     } catch (error) {
+      console.error("AuthContext: Profile update failed:", error);
       if (isMounted.current) setError(error.message);
       throw error;
     }
@@ -126,36 +151,61 @@ export const AuthProvider = ({ children }) => {
   
   // Listen for auth state changes
   useEffect(() => {
+    console.log("AuthContext: Setting up auth state listener...");
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!isMounted.current) return; // Skip if component unmounted
+      console.log("AuthContext: Auth state changed, user:", user ? user.uid : 'null');
+
+      if (!isMounted.current) {
+        console.log("AuthContext: Component unmounted, skipping state update"); 
+        return;
+      } // Skip if component unmounted
       
       if (user) {
+        console.log("AuthContext: User is authenticated, fetching additional data...");
         // Get additional user data from Firestore if needed
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists() && isMounted.current) {
+            console.log("AuthContext: User document found, combining data");
+
             // Combine auth user with Firestore data
             setCurrentUser({
               ...user,
               ...userDoc.data()
             });
           } else if (isMounted.current) {
+            console.log("AuthContext: No user document found, using auth data only");
             setCurrentUser(user);
           }
         } catch (error) {
+          console.error("AuthContext: Error fetching user data:", error);
           console.error("Error fetching user data:", error);
           if (isMounted.current) setCurrentUser(user);
         }
       } else {
+        console.log("AuthContext: User is not authenticated");
         if (isMounted.current) setCurrentUser(null);
       }
       
-      if (isMounted.current) setLoading(false);
+      if (isMounted.current) {
+        console.log("AuthContext: Setting loading to false");
+        setLoading(false)
+      };
     });
     
     // Cleanup subscription
-    return unsubscribe;
+    return () => {
+      console.log("AuthContext: Cleaning up auth state listener");
+      unsubscribe();
+    } ;
   }, []);
+
+  // Log current user state changes
+  useEffect(() => {
+    console.log("AuthContext: Current user state:", currentUser ? currentUser.uid : 'null');
+    console.log("AuthContext: Loading state:", loading);
+  }, [currentUser, loading]);
   
   // Context value
   const value = {

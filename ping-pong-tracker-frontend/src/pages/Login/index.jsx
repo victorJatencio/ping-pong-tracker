@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -13,7 +13,9 @@ const LoginPage = () => {
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login } = useAuth();
+
+    const { login, currentUser, loading: authLoading } = useAuth();
+
     const navigate = useNavigate();
     const location = useLocation();
     
@@ -26,6 +28,14 @@ const LoginPage = () => {
             isMounted.current = false;
         };
     }, []);
+
+    // Monitor auth state for automatic navigation
+    useEffect(() => {
+        if (currentUser && !authLoading) {
+            console.log("LoginPage: User is authenticated, navigating to:", from);
+            navigate(from, { replace: true });
+        }
+    }, [currentUser, authLoading, navigate, from]);
     
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -44,7 +54,17 @@ const LoginPage = () => {
                 setLoading(true);
             }
             
+            console.log("LoginPage: Attempting login...");
             await login(formData.email, formData.password);
+            console.log("LoginPage: Login successful, about to navigate to:", from);
+
+            // Force a small delay to ensure auth state is updated
+            setTimeout(() => {
+                if (isMounted.current) {
+                console.log("LoginPage: Executing navigation to:", from);
+                navigate(from, { replace: true });
+                }
+            }, 500);
             
             // Redirect to the page they were trying to access, or dashboard
             navigate(from, { replace: true });
@@ -61,6 +81,10 @@ const LoginPage = () => {
     };
     
     return (
+        <Container>
+            <Row className="justify-content-center align-items-center min-vh-100">
+                <Col xs={12} sm={10}>  
+                
         <Card className="shadow-sm">
             <Card.Body className="p-4 p-sm-5">
                 <div className="text-center mb-4">
@@ -131,6 +155,9 @@ const LoginPage = () => {
                 </Form>
             </Card.Body>
         </Card>
+        </Col>
+        </Row>
+        </Container>
     );
 };
 
