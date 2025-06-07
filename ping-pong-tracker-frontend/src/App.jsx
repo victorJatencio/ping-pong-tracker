@@ -1,8 +1,9 @@
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
 import AuthLayout from './layouts/AuthLayout';
 import MainLayout from './layouts/MainLayout';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 
 // import './App.css'
 
@@ -21,6 +22,7 @@ import Profile from './pages/Profile';
 function App() {
 
   return (
+    <AuthProvider>
     <BrowserRouter>
       <Routes>
         {/* Auth routes */}
@@ -29,20 +31,23 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
         </Route>
 
-        {/* Main app routes */}
-        <Route element={<MainLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/matches" element={<MatchesPage />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        {/* Main app routes and Protected routes (require authentication) */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<MainLayout />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/matches" element={<MatchesPage />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Route>
         </Route>
 
         {/* Catch-all route for 404 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </AuthProvider>
   )
 }
 
