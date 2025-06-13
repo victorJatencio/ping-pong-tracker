@@ -1,0 +1,63 @@
+// Leaderboard specific styles
+.leaderboard-table {
+  .rank-cell {
+    width: 60px;
+    text-align: center;
+  }
+  
+  .medal {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    color: white;
+    font-weight: bold;
+    
+    &.gold {
+      background-color: #ffd700;
+    }
+    
+    &.silver {
+      background-color: #c0c0c0;
+    }
+    
+    &.bronze {
+      background-color: #cd7f32;
+    }
+  }
+  
+  .current-user {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+  }
+  
+  .streak {
+    &.win-streak {
+      color: var(--app-win-color);
+    }
+    
+    &.loss-streak {
+      color: var(--app-loss-color);
+    }
+  }
+}
+
+.stats-card {
+  text-align: center;
+  
+  .stats-title {
+    font-size: 0.9rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: 0.5rem;
+  }
+  
+  .stats-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    
+    &.highlight {
+      color: var(--bs-primary);
+    }
+  }
+}

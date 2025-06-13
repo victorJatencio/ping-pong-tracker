@@ -1,0 +1,35 @@
+// Dashboard specific styles
+.dashboard-card {
+  height: 100%;
+  
+  .card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  
+  .stats-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+}
+
+.win-loss-chart {
+  max-width: 200px;
+  margin: 0 auto;
+}
+
+.recent-activity-item {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--bs-border-color);
+  
+  &:last-child {
+    border-bottom: none;
+  }
+  
+  .activity-time {
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+  }
+}

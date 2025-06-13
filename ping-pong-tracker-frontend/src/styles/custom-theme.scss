@@ -1,0 +1,138 @@
+// variables
+@import "variables";
+
+// Bootstrap functions and variables
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/variables-dark";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+@import "bootstrap/scss/utilities";
+
+// Override Bootstrap's theme colors
+$theme-colors: (
+  "primary": $primary,
+  "secondary": $secondary,
+  "success": $success,
+  "danger": $danger,
+  "warning": $warning,
+  "info": $info,
+  "light": $light,
+  "dark": $dark
+);
+
+// Custom color utilities
+$custom-colors: (
+  "brand-blue": $brand-blue,
+  "brand-dark-blue": $brand-dark-blue,
+  "brand-light-blue": $brand-light-blue
+);
+
+$theme-colors: map-merge($theme-colors, $custom-colors);
+
+// Light mode specific variables
+:root,
+[data-bs-theme="light"] {
+  @each $key, $value in $light-theme {
+    --bs-#{$key}: #{$value};
+  }
+
+  // Custom app-specific variables
+  --app-header-bg: #{$white};
+  --app-sidebar-bg: #{$gray-100};
+  --app-content-bg: #{$white};
+  --app-card-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  --app-win-color: #{$success};
+  --app-loss-color: #{$danger};
+}
+
+// Dark mode specific overrides
+[data-bs-theme="dark"] {
+  @each $key, $value in $dark-theme {
+    --bs-#{$key}: #{$value};
+  }
+  
+  // Custom app-specific variables
+  --app-header-bg: #{$dark-bg-secondary};
+  --app-sidebar-bg: #{$dark-bg-secondary};
+  --app-content-bg: #{$dark-bg-primary};
+  --app-card-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.2);
+  --app-win-color: #{lighten($success, 10%)};
+  --app-loss-color: #{lighten($danger, 10%)};
+  
+  // Button overrides for dark mode
+  .btn-outline-dark {
+    --bs-btn-color: #{$dark-text-primary};
+    --bs-btn-border-color: #{$dark-text-primary};
+    --bs-btn-hover-color: #{$dark-bg-primary};
+    --bs-btn-hover-bg: #{$dark-text-primary};
+    --bs-btn-hover-border-color: #{$dark-text-primary};
+    --bs-btn-active-color: #{$dark-bg-primary};
+    --bs-btn-active-bg: #{$dark-text-primary};
+    --bs-btn-active-border-color: #{$dark-text-primary};
+  }
+}
+
+// Import Bootstrap
+@import "bootstrap/scss/bootstrap";
+
+// Import Bootstrap Icons
+@import "bootstrap-icons/font/bootstrap-icons.css";
+
+// Add smooth transitions for theme switching
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.card, .btn, .form-control, .nav-link {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+// Custom component styles
+.card {
+  box-shadow: var(--app-card-shadow);
+}
+
+// Win/Loss specific styles
+.text-win {
+  color: var(--app-win-color) !important;
+}
+
+.text-loss {
+  color: var(--app-loss-color) !important;
+}
+
+
+// Custom ping-pong specific styles
+.match-score {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.player-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+// Navbar custom styling
+.navbar {
+  background-color: var(--app-header-bg) !important;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+// Table custom styling
+.table-matches {
+  th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+  }
+}
+
+// Import component-specific styles
+@import "components/dashboard";
+@import "components/matches";
+@import "components/leaderboard";

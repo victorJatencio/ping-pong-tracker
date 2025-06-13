@@ -2,6 +2,7 @@ import React from "react";
 import { Navbar, Container, Nav, Button, Dropdown } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
+import ThemeToggle from '../ThemeToggle';
 
 const Navigation = () => {
     const { currentUser, logout } = useAuth();
@@ -36,16 +37,23 @@ const Navigation = () => {
               >
                 CREATE MATCH
               </Button>
-              <Dropdown align="end">
-                <Dropdown.Toggle variant="link" className="nav-link text-white">
-                  {currentUser.displayName || currentUser.email}
-                </Dropdown.Toggle>
-                <Dropdown.Menu>
-                  <Dropdown.Item as={Link} to="/profile">Profile</Dropdown.Item>
-                  <Dropdown.Divider />
-                  <Dropdown.Item onClick={handleLogout}>Logout</Dropdown.Item>
+
+              {/* Inside Navbar component's return statement: */}
+
+              <div className="d-flex align-items-center">
+                <ThemeToggle />
+
+                <Dropdown align="end">
+                  <Dropdown.Toggle variant="link" className="nav-link text-white">
+                    {currentUser.displayName || currentUser.email}
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu>
+                    <Dropdown.Item as={Link} to="/profile">Profile</Dropdown.Item>
+                    <Dropdown.Divider />
+                    <Dropdown.Item onClick={handleLogout}>Logout</Dropdown.Item>
                 </Dropdown.Menu>
-              </Dropdown>
+                </Dropdown>
+              </div>
             </Nav>
           ) : (
             <Nav>

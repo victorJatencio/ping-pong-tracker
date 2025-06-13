@@ -1,0 +1,44 @@
+// Matches page specific styles
+.match-card {
+  margin-bottom: 1rem;
+  
+  .match-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .match-players {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 1rem 0;
+    
+    .player {
+      display: flex;
+      align-items: center;
+      
+      .player-name {
+        margin-left: 0.5rem;
+        font-weight: 500;
+      }
+    }
+    
+    .vs {
+      font-weight: 600;
+      color: var(--bs-secondary-color);
+    }
+  }
+  
+  .match-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+}
+
+.invitation-actions {
+  display: flex;
+  gap: 0.5rem;
+}

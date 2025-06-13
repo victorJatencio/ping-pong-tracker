@@ -1,0 +1,64 @@
+// Core brand colors
+$brand-blue: #4a86e8;       // Primary brand color
+$brand-dark-blue: #3a76d8;  // Darker shade for hover states
+$brand-light-blue: #5a96f8; // Lighter shade for highlights
+
+// Neutral colors
+$white: #ffffff;
+$gray-100: #f8f9fa;
+$gray-200: #e9ecef;
+$gray-300: #dee2e6;
+$gray-400: #ced4da;
+$gray-500: #adb5bd;
+$gray-600: #6c757d;
+$gray-700: #495057;
+$gray-800: #343a40;
+$gray-900: #212529;
+$black: #000000;
+
+// Semantic colors
+$success: #4caf50;      // Green for wins, success states
+$danger: #f44336;       // Red for losses, errors
+$warning: #ff9800;      // Orange for warnings, draws
+$info: #2196f3;         // Light blue for informational content
+
+// Dark mode colors
+$dark-bg-primary: #121212;      // Main background
+$dark-bg-secondary: #1e1e1e;    // Card backgrounds, elevated surfaces
+$dark-bg-tertiary: #2d2d2d;     // Headers, footers
+$dark-text-primary: #e0e0e0;    // Primary text
+$dark-text-secondary: #a0a0a0;  // Secondary text
+$dark-border: #2d2d2d;          // Borders in dark mode
+
+// Bootstrap theme color mapping
+$primary: $brand-blue;
+$secondary: $gray-600;
+$light: $gray-100;
+$dark: $gray-900;
+
+// Theme-specific maps for light/dark mode
+$light-theme: (
+  "body-bg": $white,
+  "body-color": $gray-900,
+  "border-color": $gray-300,
+  "card-bg": $white,
+  "card-cap-bg": $gray-100,
+  "table-bg": $white,
+  "table-striped-bg": $gray-100,
+  "table-hover-bg": $gray-200,
+  "input-bg": $white,
+  "input-border": $gray-400
+);
+
+$dark-theme: (
+  "body-bg": $dark-bg-primary,
+  "body-color": $dark-text-primary,
+  "border-color": $dark-border,
+  "card-bg": $dark-bg-secondary,
+  "card-cap-bg": $dark-bg-tertiary,
+  "table-bg": $dark-bg-secondary,
+  "table-striped-bg": $dark-bg-tertiary,
+  "table-hover-bg": #333333,
+  "input-bg": $dark-bg-secondary,
+  "input-border": $dark-border
+);
