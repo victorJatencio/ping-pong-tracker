@@ -1,9 +1,11 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import AuthLayout from './layouts/AuthLayout';
 import MainLayout from './layouts/MainLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+
 
 // import './App.css'
 
@@ -22,6 +24,7 @@ import ProfilePage from './pages/Profile';
 function App() {
 
   return (
+     <ErrorBoundary>
     <AuthProvider>
     <BrowserRouter>
       <Routes>
@@ -48,6 +51,7 @@ function App() {
       </Routes>
     </BrowserRouter>
     </AuthProvider>
+    </ErrorBoundary>
   )
 }
 

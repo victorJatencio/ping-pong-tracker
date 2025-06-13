@@ -9,6 +9,7 @@ export default defineConfig({
       scss: {
         // If you need to add global imports or variables
         // additionalData: `@import "./src/styles/_variables.scss";`
+        quietDeps: true // This will silence warnings from dependencies
       }
     }
   }
