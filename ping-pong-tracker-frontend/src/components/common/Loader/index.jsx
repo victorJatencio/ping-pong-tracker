@@ -1,7 +1,7 @@
 import React from 'react';
 import { Spinner } from 'react-bootstrap';
 
-const LoadingSpinner = ({ 
+const Loader = ({ 
   size = 'md', 
   variant = 'primary',
   fullPage = false,
@@ -37,4 +37,4 @@ const LoadingSpinner = ({
   );
 };
 
-export default LoadingSpinner;
+export default Loader;
