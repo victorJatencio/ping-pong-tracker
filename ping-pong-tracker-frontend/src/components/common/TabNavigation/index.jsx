@@ -25,7 +25,7 @@ const TabNavigation = () => {
     return (
         <Container fluid className="border-bottom bg-white">
             <Container>
-                <Nav className="nav-tabs border-bottom-0">
+                <Nav className="nav nav-underline">
                     {tabs.map((tab) => (
                       <Nav.Item key={tab.path}>
                          <Nav.Link

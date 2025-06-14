@@ -1,5 +1,5 @@
 // Core brand colors
-$brand-blue: #4a86e8;       // Primary brand color
+$brand-blue: #5C6BC0;       // Primary brand color
 $brand-dark-blue: #3a76d8;  // Darker shade for hover states
 $brand-light-blue: #5a96f8; // Lighter shade for highlights
 
@@ -16,6 +16,12 @@ $gray-800: #343a40;
 $gray-900: #212529;
 $black: #000000;
 
+// Light mode specific
+$light-bg-primary: #F4F6FA;
+
+// Dark mode tabs specific
+$dark-nav-tabs: #18192C;
+
 // Semantic colors
 $success: #4caf50;      // Green for wins, success states
 $danger: #f44336;       // Red for losses, errors
@@ -23,8 +29,8 @@ $warning: #ff9800;      // Orange for warnings, draws
 $info: #2196f3;         // Light blue for informational content
 
 // Dark mode colors
-$dark-bg-primary: #121212;      // Main background
-$dark-bg-secondary: #1e1e1e;    // Card backgrounds, elevated surfaces
+$dark-bg-primary: #060819;      // Main background
+$dark-bg-secondary: #18192C;    // Card backgrounds, elevated surfaces
 $dark-bg-tertiary: #2d2d2d;     // Headers, footers
 $dark-text-primary: #e0e0e0;    // Primary text
 $dark-text-secondary: #a0a0a0;  // Secondary text
@@ -38,7 +44,7 @@ $dark: $gray-900;
 
 // Theme-specific maps for light/dark mode
 $light-theme: (
-  "body-bg": $white,
+  "body-bg": $light-bg-primary,
   "body-color": $gray-900,
   "border-color": $gray-300,
   "card-bg": $white,
@@ -54,11 +60,11 @@ $dark-theme: (
   "body-bg": $dark-bg-primary,
   "body-color": $dark-text-primary,
   "border-color": $dark-border,
-  "card-bg": $dark-bg-secondary,
-  "card-cap-bg": $dark-bg-tertiary,
-  "table-bg": $dark-bg-secondary,
-  "table-striped-bg": $dark-bg-tertiary,
-  "table-hover-bg": #333333,
-  "input-bg": $dark-bg-secondary,
+  "card-bg": $dark-nav-tabs,
+  "card-cap-bg": $dark-nav-tabs,
+  "table-bg": $dark-nav-tabs,    
+  "table-striped-bg": darken($dark-nav-tabs, 3%),
+  "table-hover-bg": darken($dark-nav-tabs, 5%),
+  "input-bg": $dark-nav-tabs,
   "input-border": $dark-border
 );

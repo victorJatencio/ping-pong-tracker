@@ -9,6 +9,7 @@
 @import "bootstrap/scss/mixins";
 @import "bootstrap/scss/utilities";
 
+
 // Override Bootstrap's theme colors
 $theme-colors: (
   "primary": $primary,
@@ -38,7 +39,7 @@ $theme-colors: map-merge($theme-colors, $custom-colors);
   }
 
   // Custom app-specific variables
-  --app-header-bg: #{$white};
+  --app-header-bg: #{$brand-blue};
   --app-sidebar-bg: #{$gray-100};
   --app-content-bg: #{$white};
   --app-card-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
@@ -53,7 +54,9 @@ $theme-colors: map-merge($theme-colors, $custom-colors);
   }
   
   // Custom app-specific variables
-  --app-header-bg: #{$dark-bg-secondary};
+  --app-header-bg: #{$brand-blue};
+  --app-nav-tabs-bg: #{$dark-nav-tabs};
+  --app-footer-bg: #{$dark-nav-tabs};
   --app-sidebar-bg: #{$dark-bg-secondary};
   --app-content-bg: #{$dark-bg-primary};
   --app-card-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.2);
@@ -72,6 +75,13 @@ $theme-colors: map-merge($theme-colors, $custom-colors);
     --bs-btn-active-border-color: #{$dark-text-primary};
   }
 }
+
+// Import component-specific styles
+@import "./components/navbar";
+@import "./components/footer";
+@import "components/dashboard";
+@import "components/matches";
+@import "components/leaderboard";
 
 // Import Bootstrap
 @import "bootstrap/scss/bootstrap";
@@ -122,6 +132,19 @@ body {
   border-bottom: 1px solid var(--bs-border-color);
 }
 
+.nav-tabs {
+  background-color: var(--app-nav-tabs-bg, transparent);
+  
+  .nav-link {
+    color: var(--bs-body-color);
+    
+    &.active {
+      background-color: var(--bs-card-bg);
+      border-bottom-color: var(--bs-card-bg);
+    }
+  }
+}
+
 // Table custom styling
 .table-matches {
   th {
@@ -131,8 +154,3 @@ body {
     letter-spacing: 0.5px;
   }
 }
-
-// Import component-specific styles
-@import "components/dashboard";
-@import "components/matches";
-@import "components/leaderboard";
