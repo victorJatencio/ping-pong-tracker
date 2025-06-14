@@ -1,7 +1,10 @@
 import React, { Suspense } from 'react';
+
 import { BrowserRouter, useRoutes } from 'react-router-dom';
 import Loader from './components/common/Loader';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import { Provider } from 'react-redux';
+import { store } from './store';
 import routes from './config/routes';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -21,6 +24,7 @@ const AppRoutes = () => {
 function App() {
   return (
     <ErrorBoundary>
+      <Provider store={store}>
       <AuthProvider>
         <ThemeProvider>
           <BrowserRouter>
@@ -28,6 +32,7 @@ function App() {
           </BrowserRouter>
         </ThemeProvider>
       </AuthProvider>
+      </Provider>
     </ErrorBoundary>
   );
 }
