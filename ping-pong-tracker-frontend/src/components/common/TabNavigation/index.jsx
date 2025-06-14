@@ -1,6 +1,6 @@
 import React from "react";
-import { Nav, Container } from 'react-bootstrap';
-import { NavLink, useLocation } from "react-router-dom";
+import { Nav, Container, Button } from 'react-bootstrap';
+import { NavLink, useLocation, Link } from "react-router-dom";
 
 const TabNavigation = () => {
     const location = useLocation();
@@ -25,20 +25,35 @@ const TabNavigation = () => {
     return (
         <Container fluid className="border-bottom tab-navigation">
             <Container>
-                <Nav className="nav nav-underline">
-                    {tabs.map((tab) => (
-                      <Nav.Item key={tab.path}>
-                         <Nav.Link
-                             as={NavLink}
-                             to={tab.path}
-                             onClick={(e) => handleTabClick(e, tab.path)}
-                             end 
-                             >
-                             {tab.label}
-                         </Nav.Link>
-                      </Nav.Item>
-                    ))}
-                </Nav>
+                <div className="d-flex justify-content-between align-items-center">
+                    {/* Navigation tabs on the left */}
+                    <Nav className="nav nav-underline">
+                        {tabs.map((tab) => (
+                          <Nav.Item key={tab.path}>
+                             <Nav.Link
+                                 as={NavLink}
+                                 to={tab.path}
+                                 onClick={(e) => handleTabClick(e, tab.path)}
+                                 end 
+                                 >
+                                 {tab.label}
+                             </Nav.Link>
+                          </Nav.Item>
+                        ))}
+                    </Nav>
+                    
+                    {/* Create Match button on the right */}
+                    <Button 
+                        variant="success" 
+                        size="sm" 
+                        className="create-match-btn"
+                        as={Link}
+                        to="/matches/create"
+                    >
+                        <i className="bi bi-plus-circle me-1"></i>
+                        CREATE MATCH
+                    </Button>
+                </div>
             </Container>
         </Container>
     );

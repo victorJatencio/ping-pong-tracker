@@ -7,16 +7,16 @@ const ThemeToggle = () => {
 
     return (
         <Button
-            variant="outline-secondary"
+            variant="link"
             size="sm"
-            className='rounded-circle'
+            className="theme-toggle-btn rounded-circle p-2"
             onClick={toggleTheme}
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
         >
             {darkMode ? (
-                <i className="bi bi-sun-fill"></i>
+                <i className="bi bi-sun-fill text-white fs-5"></i>
             ) : (
-                <i className="bi bi-moon-fill"></i>
+                <i className="bi bi-moon-fill text-white fs-5"></i>
             )}
         </Button>
     );
