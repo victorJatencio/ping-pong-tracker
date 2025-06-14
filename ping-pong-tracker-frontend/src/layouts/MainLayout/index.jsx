@@ -16,7 +16,7 @@ const MainLayout = () => {
                     <Outlet />
                 </div>
             </Container>
-            <footer className="bg-light py-3 border-top">
+            <footer className="footer border-top">
                 <Container className="text-center text-muted">
                     <small>© {new Date().getFullYear()} Ping-Pong Score Tracker</small>
                 </Container>

@@ -23,7 +23,7 @@ const TabNavigation = () => {
     };
 
     return (
-        <Container fluid className="border-bottom bg-white">
+        <Container fluid className="border-bottom tab-navigation">
             <Container>
                 <Nav className="nav nav-underline">
                     {tabs.map((tab) => (

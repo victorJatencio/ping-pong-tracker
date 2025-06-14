@@ -3,10 +3,4 @@
   padding: 1.5rem 0;
   margin-top: 2rem;
   border-top: 1px solid var(--bs-border-color);
-  
-  // Dark mode styling
-  [data-bs-theme="dark"] & {
-    background-color: $dark-nav-tabs;
-    border-top-color: $dark-border;
-  }
 }
