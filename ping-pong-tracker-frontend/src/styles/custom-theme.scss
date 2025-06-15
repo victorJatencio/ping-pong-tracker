@@ -83,6 +83,7 @@ $theme-colors: map-merge($theme-colors, $custom-colors);
 @import "components/dashboard";
 @import "components/matches";
 @import "components/leaderboard";
+@import "components/history";
 @import "components/profile";
 
 // Import Bootstrap

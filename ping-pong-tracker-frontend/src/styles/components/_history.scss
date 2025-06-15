@@ -1,5 +1,5 @@
-// Leaderboard page specific styling
-.leaderboard-page {
+// History page specific styling
+.history-page {
   // Stat cards styling
   .stat-card {
     transition: all 0.3s ease;
@@ -28,7 +28,8 @@
   }
   
   // Filter section styling
-  .filter-select {
+  .filter-select,
+  .filter-input {
     border-radius: 8px;
     border: 2px solid #e9ecef;
     padding: 0.75rem 1rem;
@@ -40,8 +41,18 @@
     }
   }
   
-  // Leaderboard table styling
-  .leaderboard-table {
+  // Chart container styling
+  .chart-container {
+    position: relative;
+    height: 300px;
+    
+    canvas {
+      border-radius: 8px;
+    }
+  }
+  
+  // History table styling
+  .history-table {
     th {
       background-color: #f8f9fa;
       border-bottom: 2px solid #e9ecef;
@@ -66,47 +77,14 @@
         background-color: #f8f9fa;
         transform: scale(1.01);
       }
-      
-      // Current user row highlighting
-      &.current-user-row {
-        background-color: rgba(92, 107, 192, 0.1);
-        border-left: 4px solid #5C6BC0;
-        
-        &:hover {
-          background-color: rgba(92, 107, 192, 0.15);
-        }
-      }
-    }
-    
-    // Rank number styling
-    .rank-number {
-      font-weight: 700;
-      font-size: 1.1rem;
-      color: #495057;
-    }
-    
-    // Trophy icons for top 3
-    .bi-trophy-fill {
-      font-size: 1.2rem;
-      
-      &.text-warning {
-        color: #ffc107 !important;
-        filter: drop-shadow(0 2px 4px rgba(255, 193, 7, 0.3));
-      }
-      
-      &.text-secondary {
-        color: #6c757d !important;
-        filter: drop-shadow(0 2px 4px rgba(108, 117, 125, 0.3));
-      }
     }
   }
   
-  // Streak badge styling
-  .streak-badge {
+  // Result badge styling
+  .result-badge {
     font-weight: 600;
-    padding: 0.4rem 0.6rem;
+    padding: 0.5rem 0.75rem;
     border-radius: 6px;
-    font-size: 0.8rem;
     
     &.bg-success {
       background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
@@ -127,17 +105,17 @@
       background: linear-gradient(135deg, #5C6BC0 0%, #4a5bb8 100%) !important;
     }
     
-    &.bg-warning {
-      background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%) !important;
-      color: #212529 !important;
-    }
-    
     &.bg-success {
       background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
     }
     
     &.bg-danger {
       background: linear-gradient(135deg, #dc3545 0%, #c82333 100%) !important;
+    }
+    
+    &.bg-warning {
+      background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%) !important;
+      color: #212529 !important;
     }
     
     &.bg-info {
@@ -230,10 +208,78 @@
     color: #17a2b8 !important;
   }
   
-  // Additional cards styling
-  .d-flex.justify-content-between {
-    .badge {
-      white-space: nowrap;
+  // Empty state styling
+  .text-center {
+    .bi {
+      opacity: 0.5;
+    }
+  }
+  
+  // Performance indicators
+  .performance-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    
+    .trend-icon {
+      font-size: 1.2rem;
+      
+      &.trend-up {
+        color: #28a745;
+      }
+      
+      &.trend-down {
+        color: #dc3545;
+      }
+    }
+  }
+  
+  // Monthly summary styling
+  .monthly-summary {
+    .summary-stat {
+      text-align: center;
+      padding: 1rem;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      transition: all 0.2s ease;
+      
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+      
+      h4 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+      
+      small {
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+    }
+  }
+  
+  // Chart styling enhancements
+  .chart-card {
+    .card-body {
+      padding: 1.5rem;
+    }
+  }
+  
+  // Filter row styling
+  .filter-row {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    
+    .form-label {
+      color: #495057;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
     }
   }
   
@@ -251,10 +297,14 @@
       }
     }
     
+    .chart-container {
+      height: 250px;
+    }
+    
     .table-responsive {
       font-size: 0.9rem;
       
-      .leaderboard-table {
+      .history-table {
         td, th {
           padding: 0.75rem 0.5rem;
         }
@@ -272,25 +322,29 @@
       }
     }
     
-    .filter-select {
-      margin-bottom: 1rem;
+    .filter-row {
+      padding: 1rem;
+      
+      .form-group {
+        margin-bottom: 1rem;
+      }
+    }
+    
+    .monthly-summary {
+      .row {
+        .col-md-3 {
+          margin-bottom: 1rem;
+        }
+      }
     }
   }
   
   @media (max-width: 576px) {
-    .leaderboard-table {
+    .history-table {
       font-size: 0.8rem;
       
       th, td {
         padding: 0.5rem 0.25rem;
-      }
-      
-      .rank-number {
-        font-size: 1rem;
-      }
-      
-      .bi-trophy-fill {
-        font-size: 1rem;
       }
     }
     
@@ -302,8 +356,16 @@
     }
     
     .card-header {
-      h6 {
+      h5, h6 {
         font-size: 0.9rem;
+      }
+    }
+    
+    .filter-row {
+      .row {
+        .col-md-3 {
+          margin-bottom: 0.75rem;
+        }
       }
     }
   }
@@ -311,7 +373,7 @@
 
 // Dark mode adjustments
 [data-bs-theme="dark"] {
-  .leaderboard-page {
+  .history-page {
     .stat-card {
       background-color: #343a40;
       
@@ -324,7 +386,8 @@
       }
     }
     
-    .filter-select {
+    .filter-select,
+    .filter-input {
       background-color: #495057;
       border-color: #6c757d;
       color: #f8f9fa;
@@ -332,6 +395,14 @@
       &:focus {
         background-color: #495057;
         border-color: #5C6BC0;
+        color: #f8f9fa;
+      }
+    }
+    
+    .filter-row {
+      background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+      
+      .form-label {
         color: #f8f9fa;
       }
     }
@@ -354,7 +425,7 @@
       }
     }
     
-    .leaderboard-table {
+    .history-table {
       color: #f8f9fa;
       
       th {
@@ -367,23 +438,8 @@
         border-bottom-color: #495057;
       }
       
-      tbody tr {
-        &:hover {
-          background-color: #495057;
-        }
-        
-        &.current-user-row {
-          background-color: rgba(92, 107, 192, 0.2);
-          border-left-color: #5C6BC0;
-          
-          &:hover {
-            background-color: rgba(92, 107, 192, 0.3);
-          }
-        }
-      }
-      
-      .rank-number {
-        color: #f8f9fa;
+      tbody tr:hover {
+        background-color: #495057;
       }
     }
     
@@ -402,6 +458,13 @@
       .page-item.disabled .page-link {
         background-color: #495057;
         color: #6c757d;
+      }
+    }
+    
+    .monthly-summary {
+      .summary-stat {
+        background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+        color: #f8f9fa;
       }
     }
     
