@@ -11,7 +11,7 @@ const MainLayout = () => {
         <div className="d-flex flex-column min-vh-100">
             <Navigation />
             <TabNavigation />
-            <Container className="flex-grow-1 py-4">
+            <Container className="flex-grow-1">
                 <div key={location.pathname}>
                     <Outlet />
                 </div>

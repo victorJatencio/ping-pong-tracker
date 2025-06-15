@@ -79,9 +79,11 @@ $theme-colors: map-merge($theme-colors, $custom-colors);
 // Import component-specific styles
 @import "./components/navbar";
 @import "./components/footer";
+@import "./components/jumbotron";
 @import "components/dashboard";
 @import "components/matches";
 @import "components/leaderboard";
+@import "components/profile";
 
 // Import Bootstrap
 @import "bootstrap/scss/bootstrap";
@@ -225,10 +227,19 @@ body {
   }
 }
 
+// Ensure no unwanted spacing interferes with jumbotron
+.main-content {
+  padding-top: 0 !important; // Remove any top padding from main content
+}
+
+
 // Tab navigation styling
 .tab-navigation {
   background-color: var(--app-nav-tabs-bg, #ffffff);
-  padding: 0.5rem 0;
+  // padding: 0.5rem 0;
+  margin-bottom: 0; // Ensure no gap between tabs and jumbotron
+  position: relative;
+  z-index: 5; // Ensure tabs stay above jumbotron
   
   .nav-link {
     color: var(--bs-body-color);
@@ -322,6 +333,55 @@ body {
     &.active {
       background-color: var(--bs-card-bg);
       border-bottom-color: var(--bs-card-bg);
+    }
+  }
+}
+
+// Additional card enhancements for the overlap effect
+.jumbotron-overlap-container {
+  .card {
+    backdrop-filter: blur(10px); // Optional: subtle blur effect
+    background-color: rgba(255, 255, 255, 0.95); // Slightly transparent for depth
+    
+    // Enhanced hover effect
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    &:hover {
+      transform: translateY(-4px) scale(1.02);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    }
+  }
+}
+
+// Dark mode adjustments for the overlap cards
+[data-bs-theme="dark"] {
+  .jumbotron-overlap-container .card {
+    background-color: rgba(33, 37, 41, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .jumbotron-overlap-container {
+    margin-top: -30px; // Smaller overlap on tablets
+  }
+}
+
+@media (max-width: 576px) {
+  .jumbotron-overlap-container {
+    margin-top: -20px; // Even smaller overlap on mobile
+    
+    .card {
+      margin-bottom: 1rem; // Add spacing between cards on mobile
+    }
+  }
+  
+  .jumbotron {
+    &.jumbotron-full-width {
+      .jumbotron-content {
+        padding: 1rem 0; // Add some vertical padding on mobile
+      }
     }
   }
 }
