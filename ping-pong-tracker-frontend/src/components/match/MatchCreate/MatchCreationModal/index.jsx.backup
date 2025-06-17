@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal, Form, Button, Row, Col, Alert, Spinner } from 'react-bootstrap';
 import { useAuth } from '../../../../hooks/useAuth';
 import { db } from '../../../../config/firebase';
-import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore'; // <--- REMOVED 'query' and 'where'
 
 const MatchCreationModal = ({ show, handleClose }) => {
     const { currentUser } = useAuth();
@@ -12,8 +12,9 @@ const MatchCreationModal = ({ show, handleClose }) => {
         time: '',
         location: '',
         opponent: '', // This will be opponent's UID
+        scorePlayer1: '',
+        scorePlayer2: '',
         notes: ''
-        // Removed scorePlayer1 and scorePlayer2 - they'll default to 0
     });
     const [errors, setErrors] = useState({});
     const [successMessage, setSuccessMessage] = useState('');
@@ -38,18 +39,19 @@ const MatchCreationModal = ({ show, handleClose }) => {
                 console.log('Fetching from users collection...');
                 
                 // Fetch ALL users, then filter out current user in JavaScript
+                // This is because your documents don't have a 'uid' field to query against
                 const querySnapshot = await getDocs(usersRef);
                 
                 console.log('Query snapshot size:', querySnapshot.size);
                 
                 const fetchedOpponents = querySnapshot.docs
-                    .filter(doc => doc.id !== currentUser.uid)
+                    .filter(doc => doc.id !== currentUser.uid) // <--- FILTER OUT CURRENT USER BY DOCUMENT ID
                     .map(doc => {
                         const data = doc.data();
                         console.log('User document:', doc.id, data);
                         return {
-                            id: doc.id,
-                            uid: doc.id,
+                            id: doc.id, // Document ID (this is the UID)
+                            uid: doc.id, // Set uid to document ID for consistency
                             ...data
                         };
                     });
@@ -68,7 +70,7 @@ const MatchCreationModal = ({ show, handleClose }) => {
             }
         };
 
-        if (show) {
+        if (show) { // Fetch opponents only when modal is shown
             fetchOpponents();
             // Reset form and messages when modal opens
             const today = new Date();
@@ -80,6 +82,8 @@ const MatchCreationModal = ({ show, handleClose }) => {
                 time: '',
                 location: '',
                 opponent: '',
+                scorePlayer1: '',
+                scorePlayer2: '',
                 notes: ''
             });
             setErrors({});
@@ -109,7 +113,17 @@ const MatchCreationModal = ({ show, handleClose }) => {
         if (!formData.location) newErrors.location = 'Location is required.';
         if (!formData.opponent) newErrors.opponent = 'Opponent is required.';
         
-        // Removed score validation - scores will default to 0-0
+        const p1Score = parseInt(formData.scorePlayer1);
+        const p2Score = parseInt(formData.scorePlayer2);
+
+        if (formData.scorePlayer1 === '' || isNaN(p1Score)) newErrors.scorePlayer1 = 'Your score is required and must be a number.';
+        if (formData.scorePlayer2 === '' || isNaN(p2Score)) newErrors.scorePlayer2 = 'Opponent score is required and must be a number.';
+        
+        if (!newErrors.scorePlayer1 && !newErrors.scorePlayer2) {
+            if (p1Score === p2Score) {
+                newErrors.scores = 'Scores cannot be tied for a win/loss match.';
+            }
+        }
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -122,59 +136,59 @@ const MatchCreationModal = ({ show, handleClose }) => {
         setLoading(true);
 
         if (!currentUser) {
-            setErrorMessage("You must be logged in to schedule a match.");
+            setErrorMessage("You must be logged in to record a match.");
             setLoading(false);
             return;
         }
 
         if (validateForm()) {
             try {
-                // Create match data with new schema
+                const p1Score = parseInt(formData.scorePlayer1);
+                const p2Score = parseInt(formData.scorePlayer2);
+
+                let winnerId = '';
+                let loserId = '';
+
+                if (p1Score > p2Score) {
+                    winnerId = currentUser.uid;
+                    loserId = formData.opponent;
+                } else if (p2Score > p1Score) {
+                    winnerId = formData.opponent;
+                    loserId = currentUser.uid;
+                } else {
+                    setErrorMessage("Scores cannot be tied.");
+                    setLoading(false);
+                    return;
+                }
+                
                 const matchData = {
-                    // Player information
-                    player1Id: currentUser.uid, // The user scheduling the match
+                    player1Id: currentUser.uid, // The user recording the match
                     player2Id: formData.opponent,
-                    
-                    // Scores (default to 0-0 for scheduled matches)
-                    player1Score: 0,
-                    player2Score: 0,
-                    
-                    // Winner/Loser (null for scheduled matches)
-                    winnerId: null,
-                    loserId: null,
-                    
-                    // Match details
+                    player1Score: p1Score,
+                    player2Score: p2Score,
+                    winnerId: winnerId,
+                    loserId: loserId,
                     date: formData.date,
                     time: formData.time,
                     location: formData.location,
                     notes: formData.notes,
-                    
-                    // Timestamps
                     createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                    
-                    // New workflow fields
-                    status: "scheduled", // scheduled | in-progress | completed
-                    scheduledDate: serverTimestamp(),
-                    completedDate: null,
-                    lastUpdatedBy: currentUser.uid,
-                    scoreUpdateHistory: [] // Track score changes for transparency
+                    updatedAt: serverTimestamp()
                 };
 
-                console.log('Scheduling match data:', matchData);
+                console.log('Submitting match data:', matchData);
                 const docRef = await addDoc(collection(db, 'matches'), matchData);
-                console.log("Match scheduled with ID: ", docRef.id);
+                console.log("Document written with ID: ", docRef.id);
                 
-                setSuccessMessage('Match successfully scheduled! You can update the score after playing.');
-                
-                // Close modal after success
+                setSuccessMessage('Match successfully recorded!');
+                // Optionally close modal after success
                 setTimeout(() => {
                     handleClose();
                 }, 2000);
 
             } catch (error) {
-                console.error('Error scheduling match:', error);
-                setErrorMessage(`Failed to schedule match: ${error.message}`);
+                console.error('Error submitting match:', error);
+                setErrorMessage(`Failed to record match: ${error.message}`);
             } finally {
                 setLoading(false);
             }
@@ -187,18 +201,11 @@ const MatchCreationModal = ({ show, handleClose }) => {
     return (
         <Modal show={show} onHide={handleClose} centered size="lg">
             <Modal.Header closeButton>
-                <Modal.Title>Schedule a New Match</Modal.Title>
+                <Modal.Title>Record a New Match</Modal.Title>
             </Modal.Header>
             <Modal.Body>
                 {successMessage && <Alert variant="success">{successMessage}</Alert>}
                 {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
-                
-                <Alert variant="info" className="mb-3">
-                    <strong>📅 Scheduling a Match</strong><br />
-                    You're creating a scheduled match with initial scores of 0-0. 
-                    After playing, you can update the final scores from your dashboard.
-                </Alert>
-
                 <Form onSubmit={handleSubmit}>
                     <Row className="mb-3">
                         <Form.Group as={Col} controlId="formDate">
@@ -283,19 +290,19 @@ const MatchCreationModal = ({ show, handleClose }) => {
                         )}
                     </Form.Group>
 
-                    {/* Disabled Score Display */}
                     <Row className="mb-3">
                         <Col>
                             <Form.Label>Your Score</Form.Label>
                             <Form.Control
                                 type="number"
-                                value="0"
-                                disabled
-                                className="bg-light"
+                                name="scorePlayer1"
+                                value={formData.scorePlayer1}
+                                onChange={handleChange}
+                                isInvalid={!!errors.scorePlayer1 || !!errors.scores}
                             />
-                            <Form.Text className="text-muted">
-                                Scores start at 0-0. Update after playing.
-                            </Form.Text>
+                            <Form.Control.Feedback type="invalid">
+                                {errors.scorePlayer1}
+                            </Form.Control.Feedback>
                         </Col>
                         <Col className="d-flex align-items-end justify-content-center">
                             <span className="fs-4 fw-bold text-muted">-</span>
@@ -304,15 +311,17 @@ const MatchCreationModal = ({ show, handleClose }) => {
                             <Form.Label>Opponent Score</Form.Label>
                             <Form.Control
                                 type="number"
-                                value="0"
-                                disabled
-                                className="bg-light"
+                                name="scorePlayer2"
+                                value={formData.scorePlayer2}
+                                onChange={handleChange}
+                                isInvalid={!!errors.scorePlayer2 || !!errors.scores}
                             />
-                            <Form.Text className="text-muted">
-                                Scores start at 0-0. Update after playing.
-                            </Form.Text>
+                            <Form.Control.Feedback type="invalid">
+                                {errors.scorePlayer2}
+                            </Form.Control.Feedback>
                         </Col>
                     </Row>
+                    {errors.scores && <Alert variant="danger" className="mt-2">{errors.scores}</Alert>}
 
                     <Form.Group className="mb-4" controlId="formNotes">
                         <Form.Label>Notes (Optional)</Form.Label>
@@ -338,10 +347,10 @@ const MatchCreationModal = ({ show, handleClose }) => {
                                         aria-hidden="true"
                                         className="me-2"
                                     />
-                                    Scheduling...
+                                    Recording...
                                 </>
                             ) : (
-                                '📅 Schedule Match'
+                                'Record Match'
                             )}
                         </Button>
                     </div>

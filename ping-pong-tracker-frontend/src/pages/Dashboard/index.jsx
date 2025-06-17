@@ -11,6 +11,7 @@ import {
     Tooltip,
     Legend,
 } from 'chart.js';
+import OngoingMatches from '../../components/match/OngoingMatches';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -553,6 +554,13 @@ const Dashboard = () => {
                                     )}
                                 </Card.Body>
                             </Card>
+                        </Col>
+                    </Row>
+
+                    {/* Add this section to your Dashboard */}
+                    <Row className="mb-4">
+                        <Col>
+                            <OngoingMatches />
                         </Col>
                     </Row>
                 </Container>
