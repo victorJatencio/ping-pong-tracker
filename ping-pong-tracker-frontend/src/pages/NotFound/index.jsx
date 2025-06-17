@@ -1,7 +1,6 @@
 import React from 'react';
 import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../../hooks/useTheme';
 
 const NotFound = () => {
   const { darkMode } = useTheme?.() || { darkMode: false }; // Use the theme if available

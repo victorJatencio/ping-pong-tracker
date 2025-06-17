@@ -1,9 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 import { Nav, Container, Button } from 'react-bootstrap';
 import { NavLink, useLocation, Link } from "react-router-dom";
+import MatchCreationModal from '../../match/MatchCreate/MatchCreationModal';
 
 const TabNavigation = () => {
     const location = useLocation();
+
+    // Modal State Logic
+    const [showMatchModal, setShowMatchModal] = useState(false); 
+    const handleShowMatchModal = () => setShowMatchModal(true); // <--- HANDLER TO OPEN MODAL
+    const handleCloseMatchModal = () => setShowMatchModal(false); // <--- HANDLER TO CLOSE MODAL
 
     // Define tabs with their routes and labels
     const tabs = [
@@ -47,14 +53,19 @@ const TabNavigation = () => {
                         variant="success" 
                         size="sm" 
                         className="create-match-btn"
-                        as={Link}
-                        to="/matches/create"
+                        onClick={handleShowMatchModal}
                     >
                         <i className="bi bi-plus-circle me-1"></i>
                         CREATE MATCH
                     </Button>
                 </div>
             </Container>
+
+            {/* Match Creation Modal */}
+            <MatchCreationModal 
+                show={showMatchModal} 
+                handleClose={handleCloseMatchModal} 
+            />
         </Container>
     );
 };
