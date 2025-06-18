@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Container, Row, Col, Card, Table, Badge, Form, Button, InputGroup } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
@@ -15,6 +15,15 @@ import {
     Tooltip,
     Legend,
 } from 'chart.js';
+import { db } from '../../config/firebase';
+import { 
+    collection, 
+    getDocs,
+    query,
+    where,
+    orderBy
+} from 'firebase/firestore';
+import statsService from '../../services/statsService';
 
 // Register Chart.js components
 ChartJS.register(
@@ -29,6 +38,17 @@ ChartJS.register(
 
 const History = () => {
     const { currentUser } = useAuth();
+    
+    // State for real data
+    const [historyData, setHistoryData] = useState({
+        allMatches: [],
+        userStats: null,
+        usersMap: {}
+    });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    
+    // Filter states
     const [resultFilter, setResultFilter] = useState('all');
     const [playerFilter, setPlayerFilter] = useState('all');
     const [dateRange, setDateRange] = useState('all');
@@ -36,43 +56,119 @@ const History = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const matchesPerPage = 10;
 
-    // Mock match history data - replace with actual data from your backend
-    const allMatches = [
-        { id: 1, date: 'Jun 5, 2025', opponent: 'Jane', opponentAvatar: null, score: '21-15', result: 'Won', details: 'Great match!' },
-        { id: 2, date: 'June 3, 2025', opponent: 'Mike', opponentAvatar: null, score: '18-21', result: 'Lost', details: 'Close game' },
-        { id: 3, date: 'May 30, 2025', opponent: 'Sarah', opponentAvatar: null, score: '21-19', result: 'Won', details: 'Comeback win' },
-        { id: 4, date: 'May 28, 2025', opponent: 'Tom', opponentAvatar: null, score: '15-21', result: 'Lost', details: 'Tough opponent' },
-        { id: 5, date: 'May 25, 2025', opponent: 'Alex', opponentAvatar: null, score: '21-12', result: 'Won', details: 'Dominant performance' },
-        { id: 6, date: 'May 23, 2025', opponent: 'Lisa', opponentAvatar: null, score: '19-21', result: 'Lost', details: 'Heartbreaker' },
-        { id: 7, date: 'May 20, 2025', opponent: 'David', opponentAvatar: null, score: '21-16', result: 'Won', details: 'Solid win' },
-        { id: 8, date: 'May 18, 2025', opponent: 'Emma', opponentAvatar: null, score: '21-14', result: 'Won', details: 'Easy victory' },
-        { id: 9, date: 'May 15, 2025', opponent: 'Chris', opponentAvatar: null, score: '17-21', result: 'Lost', details: 'Off day' },
-        { id: 10, date: 'May 12, 2025', opponent: 'Jane', opponentAvatar: null, score: '21-18', result: 'Won', details: 'Revenge match' },
-        { id: 11, date: 'May 10, 2025', opponent: 'Mike', opponentAvatar: null, score: '16-21', result: 'Lost', details: 'Learning experience' },
-        { id: 12, date: 'May 8, 2025', opponent: 'Sarah', opponentAvatar: null, score: '21-13', result: 'Won', details: 'Perfect game' },
-        { id: 13, date: 'May 5, 2025', opponent: 'Tom', opponentAvatar: null, score: '21-20', result: 'Won', details: 'Nail-biter' },
-        { id: 14, date: 'May 3, 2025', opponent: 'Alex', opponentAvatar: null, score: '14-21', result: 'Lost', details: 'Rusty performance' },
-        { id: 15, date: 'May 1, 2025', opponent: 'Lisa', opponentAvatar: null, score: '21-17', result: 'Won', details: 'Month starter' },
-    ];
+    // Helper function to format date - MOVED UP before its usage
+    const formatMatchDate = (date) => {
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    };
 
-    // Calculate statistics
-    const totalMatches = allMatches.length;
-    const wins = allMatches.filter(match => match.result === 'Won').length;
-    const losses = allMatches.filter(match => match.result === 'Lost').length;
-    const winRate = Math.round((wins / totalMatches) * 100);
+    // Load history data
+    useEffect(() => {
+        if (!currentUser?.uid) return;
 
-    // Calculate longest streak
+        const loadHistoryData = async () => {
+            try {
+                setLoading(true);
+                setError('');
+
+                console.log('Loading history data for user:', currentUser.uid);
+
+                // Load user statistics
+                const userStats = await statsService.getPlayerProfileStats(currentUser.uid);
+                console.log('User stats loaded:', userStats);
+
+                // Load ALL matches and filter for user
+                const allMatchesSnapshot = await getDocs(collection(db, 'matches'));
+                const allMatches = [];
+                allMatchesSnapshot.forEach(doc => {
+                    const matchData = { id: doc.id, ...doc.data() };
+                    // Only include matches where current user participated
+                    if (matchData.player1Id === currentUser.uid || matchData.player2Id === currentUser.uid) {
+                        allMatches.push(matchData);
+                    }
+                });
+                console.log('User matches loaded:', allMatches.length);
+
+                // Load users for opponent names
+                const usersSnapshot = await getDocs(collection(db, 'users'));
+                const usersMap = {};
+                usersSnapshot.forEach(doc => {
+                    usersMap[doc.id] = { id: doc.id, ...doc.data() };
+                });
+                console.log('Users loaded:', Object.keys(usersMap).length);
+
+                // Sort matches by date (most recent first)
+                const sortedMatches = allMatches
+                    .filter(match => match.status === 'completed')
+                    .sort((a, b) => {
+                        const dateA = a.completedDate?.toDate() || new Date(0);
+                        const dateB = b.completedDate?.toDate() || new Date(0);
+                        return dateB - dateA;
+                    });
+
+                console.log('Sorted completed matches:', sortedMatches.length);
+
+                setHistoryData({
+                    allMatches: sortedMatches,
+                    userStats,
+                    usersMap
+                });
+
+            } catch (error) {
+                console.error('Error loading history data:', error);
+                setError(`Failed to load history data: ${error.message}`);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadHistoryData();
+    }, [currentUser?.uid]);
+
+    // Process matches for display
+    const processedMatches = useMemo(() => {
+        return historyData.allMatches.map(match => {
+            const opponentId = match.player1Id === currentUser.uid ? match.player2Id : match.player1Id;
+            const opponent = historyData.usersMap[opponentId];
+            const isWinner = match.winnerId === currentUser.uid;
+            
+            return {
+                id: match.id,
+                date: match.completedDate ? formatMatchDate(match.completedDate.toDate()) : 'Unknown',
+                opponent: opponent?.name || opponent?.email || 'Unknown Player',
+                opponentAvatar: opponent?.profileImageUrl || null,
+                score: `${match.player1Score}-${match.player2Score}`,
+                result: isWinner ? 'Won' : 'Lost',
+                details: match.notes || 'No details',
+                rawDate: match.completedDate?.toDate() || new Date(0),
+                location: match.location || 'Unknown'
+            };
+        });
+    }, [historyData.allMatches, historyData.usersMap, currentUser?.uid]);
+
+    // Calculate statistics from real data
+    const totalMatches = processedMatches.length;
+    const wins = processedMatches.filter(match => match.result === 'Won').length;
+    const losses = processedMatches.filter(match => match.result === 'Lost').length;
+    const winRate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
+
+    // Calculate longest streak from real data
     const calculateLongestStreak = () => {
+        if (processedMatches.length === 0) return { count: 0, type: 'None' };
+        
         let longestStreak = 0;
         let currentStreak = 0;
         let streakType = '';
         let longestStreakType = '';
         
-        // Sort matches by date (most recent first)
-        const sortedMatches = [...allMatches].reverse();
+        // Process matches in chronological order (reverse of display order)
+        const chronologicalMatches = [...processedMatches].reverse();
         
-        for (let i = 0; i < sortedMatches.length; i++) {
-            const currentResult = sortedMatches[i].result;
+        for (let i = 0; i < chronologicalMatches.length; i++) {
+            const currentResult = chronologicalMatches[i].result;
             
             if (i === 0 || currentResult === streakType) {
                 currentStreak++;
@@ -98,13 +194,54 @@ const History = () => {
 
     const longestStreak = calculateLongestStreak();
 
-    // Performance chart data
-    const chartData = {
-        labels: ['1', '2', '3', '4', '5', '6', '7', '8', '9'],
-        datasets: [
-            {
+    // Generate performance chart data from real matches
+    const generatePerformanceChart = () => {
+        if (processedMatches.length === 0) {
+            return {
+                labels: ['No Data'],
+                datasets: [{
+                    label: 'Win Rate %',
+                    data: [0],
+                    borderColor: '#5C6BC0',
+                    backgroundColor: 'rgba(92, 107, 192, 0.1)',
+                    borderWidth: 3,
+                    pointBackgroundColor: '#5C6BC0',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 6,
+                    tension: 0.4,
+                }]
+            };
+        }
+
+        // Group matches by month and calculate win rate for each month
+        const monthlyData = {};
+        processedMatches.forEach(match => {
+            const monthKey = match.rawDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            if (!monthlyData[monthKey]) {
+                monthlyData[monthKey] = { wins: 0, total: 0 };
+            }
+            monthlyData[monthKey].total++;
+            if (match.result === 'Won') {
+                monthlyData[monthKey].wins++;
+            }
+        });
+
+        // Convert to chart format (last 6 months)
+        const sortedMonths = Object.keys(monthlyData).sort((a, b) => {
+            return new Date(a) - new Date(b);
+        }).slice(-6);
+
+        const labels = sortedMonths.length > 0 ? sortedMonths : ['Current'];
+        const data = sortedMonths.length > 0 
+            ? sortedMonths.map(month => Math.round((monthlyData[month].wins / monthlyData[month].total) * 100))
+            : [winRate];
+
+        return {
+            labels,
+            datasets: [{
                 label: 'Win Rate %',
-                data: [15, 12, 15, 10, 8, 12, 15, 13, 12],
+                data,
                 borderColor: '#5C6BC0',
                 backgroundColor: 'rgba(92, 107, 192, 0.1)',
                 borderWidth: 3,
@@ -113,9 +250,11 @@ const History = () => {
                 pointBorderWidth: 2,
                 pointRadius: 6,
                 tension: 0.4,
-            },
-        ],
+            }]
+        };
     };
+
+    const chartData = generatePerformanceChart();
 
     const chartOptions = {
         responsive: true,
@@ -131,12 +270,15 @@ const History = () => {
         scales: {
             y: {
                 beginAtZero: true,
-                max: 30,
+                max: 100,
                 grid: {
                     color: 'rgba(0, 0, 0, 0.1)',
                 },
                 ticks: {
                     color: '#6c757d',
+                    callback: function(value) {
+                        return value + '%';
+                    }
                 },
             },
             x: {
@@ -152,7 +294,7 @@ const History = () => {
 
     // Filter matches based on current filters
     const filteredMatches = useMemo(() => {
-        return allMatches.filter(match => {
+        return processedMatches.filter(match => {
             const matchesResult = resultFilter === 'all' || match.result.toLowerCase() === resultFilter;
             const matchesPlayer = playerFilter === 'all' || match.opponent.toLowerCase().includes(playerFilter.toLowerCase());
             const matchesSearch = searchTerm === '' || 
@@ -160,9 +302,31 @@ const History = () => {
                 match.score.includes(searchTerm) ||
                 match.details.toLowerCase().includes(searchTerm.toLowerCase());
             
-            return matchesResult && matchesPlayer && matchesSearch;
+            // Date range filtering
+            let matchesDateRange = true;
+            if (dateRange !== 'all') {
+                const matchDate = match.rawDate;
+                const now = new Date();
+                const daysDiff = Math.floor((now - matchDate) / (1000 * 60 * 60 * 24));
+                
+                switch (dateRange) {
+                    case 'week':
+                        matchesDateRange = daysDiff <= 7;
+                        break;
+                    case 'month':
+                        matchesDateRange = daysDiff <= 30;
+                        break;
+                    case '3months':
+                        matchesDateRange = daysDiff <= 90;
+                        break;
+                    default:
+                        matchesDateRange = true;
+                }
+            }
+            
+            return matchesResult && matchesPlayer && matchesSearch && matchesDateRange;
         });
-    }, [resultFilter, playerFilter, searchTerm]);
+    }, [processedMatches, resultFilter, playerFilter, searchTerm, dateRange]);
 
     // Pagination logic
     const totalPages = Math.ceil(filteredMatches.length / matchesPerPage);
@@ -171,36 +335,68 @@ const History = () => {
     const currentMatches = filteredMatches.slice(startIndex, endIndex);
 
     // Get unique opponents for filter
-    const uniqueOpponents = [...new Set(allMatches.map(match => match.opponent))];
+    const uniqueOpponents = [...new Set(processedMatches.map(match => match.opponent))];
 
-    // Recent performance data
-    const recentMatches = allMatches.slice(0, 10);
+    // Recent performance data (last 10 matches)
+    const recentMatches = processedMatches.slice(0, 10);
     const recentWins = recentMatches.filter(match => match.result === 'Won').length;
-    const recentWinRate = Math.round((recentWins / recentMatches.length) * 100);
+    const recentWinRate = recentMatches.length > 0 ? Math.round((recentWins / recentMatches.length) * 100) : 0;
 
-    // Best/Worst opponents
-    const opponentStats = {};
-    allMatches.forEach(match => {
-        if (!opponentStats[match.opponent]) {
-            opponentStats[match.opponent] = { wins: 0, losses: 0, total: 0 };
-        }
-        opponentStats[match.opponent].total++;
-        if (match.result === 'Won') {
-            opponentStats[match.opponent].wins++;
-        } else {
-            opponentStats[match.opponent].losses++;
-        }
-    });
+    // Calculate opponent statistics
+    const calculateOpponentStats = () => {
+        const opponentStats = {};
+        processedMatches.forEach(match => {
+            if (!opponentStats[match.opponent]) {
+                opponentStats[match.opponent] = { wins: 0, losses: 0, total: 0 };
+            }
+            opponentStats[match.opponent].total++;
+            if (match.result === 'Won') {
+                opponentStats[match.opponent].wins++;
+            } else {
+                opponentStats[match.opponent].losses++;
+            }
+        });
 
-    const bestOpponent = Object.entries(opponentStats)
-        .map(([name, stats]) => ({ name, winRate: Math.round((stats.wins / stats.total) * 100), total: stats.total }))
-        .filter(opponent => opponent.total >= 2)
-        .sort((a, b) => b.winRate - a.winRate)[0];
+        const opponentList = Object.entries(opponentStats)
+            .map(([name, stats]) => ({ 
+                name, 
+                winRate: Math.round((stats.wins / stats.total) * 100), 
+                total: stats.total,
+                wins: stats.wins,
+                losses: stats.losses
+            }))
+            .filter(opponent => opponent.total >= 2); // Only include opponents with 2+ matches
 
-    const worstOpponent = Object.entries(opponentStats)
-        .map(([name, stats]) => ({ name, winRate: Math.round((stats.wins / stats.total) * 100), total: stats.total }))
-        .filter(opponent => opponent.total >= 2)
-        .sort((a, b) => a.winRate - b.winRate)[0];
+        const bestOpponent = opponentList.sort((a, b) => b.winRate - a.winRate)[0];
+        const worstOpponent = opponentList.sort((a, b) => a.winRate - b.winRate)[0];
+
+        return { bestOpponent, worstOpponent };
+    };
+
+    const { bestOpponent, worstOpponent } = calculateOpponentStats();
+
+    // Monthly summary calculation
+    const calculateMonthlySummary = () => {
+        const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const currentMonthMatches = processedMatches.filter(match => {
+            const matchMonth = match.rawDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            return matchMonth === currentMonth;
+        });
+
+        const monthlyWins = currentMonthMatches.filter(match => match.result === 'Won').length;
+        const monthlyTotal = currentMonthMatches.length;
+        const monthlyWinRate = monthlyTotal > 0 ? Math.round((monthlyWins / monthlyTotal) * 100) : 0;
+
+        return {
+            month: currentMonth,
+            wins: monthlyWins,
+            losses: monthlyTotal - monthlyWins,
+            total: monthlyTotal,
+            winRate: monthlyWinRate
+        };
+    };
+
+    const monthlySummary = calculateMonthlySummary();
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
@@ -225,6 +421,8 @@ const History = () => {
     };
 
     const renderPagination = () => {
+        if (totalPages <= 1) return null;
+
         const pages = [];
         const maxVisiblePages = 5;
         
@@ -253,15 +451,94 @@ const History = () => {
             );
         }
 
-        return pages;
+        return (
+            <nav>
+                <ul className="pagination justify-content-center">
+                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                        <button 
+                            className="page-link" 
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                        >
+                            Previous
+                        </button>
+                    </li>
+                    {pages}
+                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                        <button 
+                            className="page-link" 
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                        >
+                            Next
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+        );
     };
+
+    if (loading) {
+        return (
+            <div className="history-page">
+                <Jumbotron
+                    title="Match History"
+                    subtitle="Loading your match history..."
+                    backgroundImage="https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+                    height="300px"
+                    overlay={true}
+                    textAlign="left"
+                    fullWidth={true}
+                    className="jumbotron-primary"
+                />
+                <div className="jumbotron-overlap-container">
+                    <Container className="py-5">
+                        <div className="text-center">
+                            <div className="spinner-border text-primary" role="status">
+                                <span className="visually-hidden">Loading...</span>
+                            </div>
+                            <p className="mt-3 text-muted">Loading your match history...</p>
+                        </div>
+                    </Container>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="history-page">
+                <Jumbotron
+                    title="Match History"
+                    subtitle="There was an error loading your history"
+                    backgroundImage="https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+                    height="300px"
+                    overlay={true}
+                    textAlign="left"
+                    fullWidth={true}
+                    className="jumbotron-primary"
+                />
+                <div className="jumbotron-overlap-container">
+                    <Container className="py-5">
+                        <div className="alert alert-danger text-center">
+                            <h5>Error Loading History</h5>
+                            <p>{error}</p>
+                            <Button variant="primary" onClick={() => window.location.reload()}>
+                                Try Again
+                            </Button>
+                        </div>
+                    </Container>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="history-page">
             {/* Standard Jumbotron */}
             <Jumbotron
                 title="Match History"
-                subtitle="View your past matches and performance over time"
+                subtitle={`View your ${totalMatches} matches and performance over time`}
                 backgroundImage="https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
                 height="300px"
                 overlay={true}
@@ -300,13 +577,13 @@ const History = () => {
                                     <h2 className={`display-4 mb-0 ${longestStreak.type === 'Won' ? 'text-success' : 'text-danger'}`}>
                                         {longestStreak.count}
                                     </h2>
-                                    <small className="text-muted">{longestStreak.type === 'Won' ? 'Wins' : 'Losses'}</small>
+                                    <small className="text-muted">{longestStreak.type === 'Won' ? 'Wins' : longestStreak.type === 'Lost' ? 'Losses' : 'None'}</small>
                                 </Card.Body>
                             </Card>
                         </Col>
                     </Row>
 
-                    {/* Performance Chart and Filters Row */}
+                    {/* Performance Chart and Additional Stats Row */}
                     <Row className="mb-4">
                         {/* Performance Over Time Chart */}
                         <Col lg={6}>
@@ -338,7 +615,7 @@ const History = () => {
                                             <div className="d-flex justify-content-between align-items-center">
                                                 <div>
                                                     <h4 className="text-primary mb-1">{recentWinRate}%</h4>
-                                                    <small className="text-muted">Last 10 matches</small>
+                                                    <small className="text-muted">Last {recentMatches.length} matches</small>
                                                 </div>
                                                 <div className="text-end">
                                                     <Badge bg={recentWinRate >= winRate ? 'success' : 'warning'}>
@@ -359,15 +636,25 @@ const History = () => {
                                                 Best Matchup
                                             </h6>
                                         </Card.Header>
-                                        <Card.Body className="text-center">
+                                        <Card.Body>
                                             {bestOpponent ? (
-                                                <>
-                                                    <h5 className="text-success mb-1">{bestOpponent.name}</h5>
-                                                    <p className="mb-0">{bestOpponent.winRate}% win rate</p>
-                                                    <small className="text-muted">{bestOpponent.total} matches</small>
-                                                </>
-                                             ) : (
-                                                <p className="text-muted mb-0">Play more matches</p>
+                                                <div className="text-center">
+                                                    <UserAvatar 
+                                                        user={{ displayName: bestOpponent.name }} 
+                                                        size={40} 
+                                                        className="mb-2"
+                                                    />
+                                                    <h6 className="mb-1">{bestOpponent.name}</h6>
+                                                    <Badge bg="success">{bestOpponent.winRate}% win rate</Badge>
+                                                    <div className="mt-1">
+                                                        <small className="text-muted">{bestOpponent.wins}-{bestOpponent.losses}</small>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center text-muted">
+                                                    <i className="bi bi-person-x fs-1 d-block mb-2"></i>
+                                                    <small>Need more matches</small>
+                                                </div>
                                             )}
                                         </Card.Body>
                                     </Card>
@@ -381,15 +668,25 @@ const History = () => {
                                                 Toughest Opponent
                                             </h6>
                                         </Card.Header>
-                                        <Card.Body className="text-center">
+                                        <Card.Body>
                                             {worstOpponent ? (
-                                                <>
-                                                    <h5 className="text-danger mb-1">{worstOpponent.name}</h5>
-                                                    <p className="mb-0">{worstOpponent.winRate}% win rate</p>
-                                                    <small className="text-muted">{worstOpponent.total} matches</small>
-                                                </>
+                                                <div className="text-center">
+                                                    <UserAvatar 
+                                                        user={{ displayName: worstOpponent.name }} 
+                                                        size={40} 
+                                                        className="mb-2"
+                                                    />
+                                                    <h6 className="mb-1">{worstOpponent.name}</h6>
+                                                    <Badge bg="danger">{worstOpponent.winRate}% win rate</Badge>
+                                                    <div className="mt-1">
+                                                        <small className="text-muted">{worstOpponent.wins}-{worstOpponent.losses}</small>
+                                                    </div>
+                                                </div>
                                             ) : (
-                                                <p className="text-muted mb-0">Play more matches</p>
+                                                <div className="text-center text-muted">
+                                                    <i className="bi bi-person-x fs-1 d-block mb-2"></i>
+                                                    <small>Need more matches</small>
+                                                </div>
                                             )}
                                         </Card.Body>
                                     </Card>
@@ -398,178 +695,185 @@ const History = () => {
                         </Col>
                     </Row>
 
-                    {/* Filter Section */}
+                    {/* Match History Table with Filters */}
                     <Row className="mb-4">
-                        <Col md={3}>
-                            <Form.Group className="mb-3">
-                                <Form.Label className="fw-bold">Results:</Form.Label>
-                                <Form.Select 
-                                    value={resultFilter} 
-                                    onChange={(e) => handleFilterChange('result', e.target.value)}
-                                    className="filter-select"
-                                >
-                                    <option value="all">All Results</option>
-                                    <option value="won">Wins Only</option>
-                                    <option value="lost">Losses Only</option>
-                                </Form.Select>
-                            </Form.Group>
-                        </Col>
-                        <Col md={3}>
-                            <Form.Group className="mb-3">
-                                <Form.Label className="fw-bold">Players:</Form.Label>
-                                <Form.Select 
-                                    value={playerFilter} 
-                                    onChange={(e) => handleFilterChange('player', e.target.value)}
-                                    className="filter-select"
-                                >
-                                    <option value="all">All Players</option>
-                                    {uniqueOpponents.map(opponent => (
-                                        <option key={opponent} value={opponent}>{opponent}</option>
-                                    ))}
-                                </Form.Select>
-                            </Form.Group>
-                        </Col>
-                        <Col md={3}>
-                            <Form.Group className="mb-3">
-                                <Form.Label className="fw-bold">Date Range:</Form.Label>
-                                <Form.Select 
-                                    value={dateRange} 
-                                    onChange={(e) => handleFilterChange('dateRange', e.target.value)}
-                                    className="filter-select"
-                                >
-                                    <option value="all">All Time</option>
-                                    <option value="this-month">This Month</option>
-                                    <option value="last-month">Last Month</option>
-                                    <option value="last-3-months">Last 3 Months</option>
-                                </Form.Select>
-                            </Form.Group>
-                        </Col>
-                        <Col md={3}>
-                            <Form.Group className="mb-3">
-                                <Form.Label className="fw-bold">Search:</Form.Label>
-                                <InputGroup>
-                                    <Form.Control
-                                        type="text"
-                                        placeholder="Search matches..."
-                                        value={searchTerm}
-                                        onChange={(e) => handleFilterChange('search', e.target.value)}
-                                        className="filter-input"
-                                    />
-                                    <InputGroup.Text>
-                                        <i className="bi bi-search"></i>
-                                    </InputGroup.Text>
-                                </InputGroup>
-                            </Form.Group>
-                        </Col>
-                    </Row>
-
-                    {/* Match History Table */}
-                    <Card className="mb-4">
-                        <Card.Header>
-                            <h5 className="mb-0">Match History ({filteredMatches.length} matches)</h5>
-                        </Card.Header>
-                        <Card.Body className="p-0">
-                            <div className="table-responsive">
-                                <Table className="mb-0 history-table">
-                                    <thead className="table-light">
-                                        <tr>
-                                            <th>Date</th>
-                                            <th>Opponent</th>
-                                            <th>Score</th>
-                                            <th>Result</th>
-                                            <th>Details</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {currentMatches.length > 0 ? (
-                                            currentMatches.map((match) => (
-                                                <tr key={match.id}>
-                                                    <td>
-                                                        <span className="fw-bold">{match.date}</span>
-                                                    </td>
-                                                    <td>
-                                                        <div className="d-flex align-items-center">
-                                                            <UserAvatar 
-                                                                user={{ 
-                                                                    displayName: match.opponent,
-                                                                    photoURL: match.opponentAvatar 
-                                                                }} 
-                                                                size={32} 
-                                                                className="me-2"
-                                                            />
-                                                            <span>{match.opponent}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span className="fw-bold">{match.score}</span>
-                                                    </td>
-                                                    <td>
-                                                        <Badge 
-                                                            bg={match.result === 'Won' ? 'success' : 'danger'}
-                                                            className="result-badge"
-                                                        >
-                                                            {match.result}
-                                                        </Badge>
-                                                    </td>
-                                                    <td>
-                                                        <Button variant="outline-primary" size="sm">
-                                                            View
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        ) : (
-                                            <tr>
-                                                <td colSpan="5" className="text-center py-4">
-                                                    <i className="bi bi-search fs-1 text-muted d-block mb-2"></i>
-                                                    <p className="text-muted mb-0">No matches found with current filters</p>
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </Table>
-                            </div>
-                        </Card.Body>
-                        {totalPages > 1 && (
-                            <Card.Footer>
-                                <nav aria-label="Match history pagination">
-                                    <ul className="pagination pagination-sm justify-content-center mb-0">
-                                        {renderPagination()}
-                                    </ul>
-                                </nav>
-                            </Card.Footer>
-                        )}
-                    </Card>
-
-                    {/* Monthly Summary Card */}
-                    <Row>
-                        <Col lg={12}>
-                            <Card className="mb-4">
+                        <Col lg={9}>
+                            <Card>
                                 <Card.Header>
-                                    <h5 className="mb-0">
-                                        <i className="bi bi-calendar-month me-2"></i>
-                                        Monthly Summary
-                                    </h5>
+                                    <div className="d-flex justify-content-between align-items-center">
+                                        <h5 className="mb-0">Match History</h5>
+                                        <Badge bg="secondary">{filteredMatches.length} matches</Badge>
+                                    </div>
                                 </Card.Header>
                                 <Card.Body>
-                                    <Row>
-                                        <Col md={3} className="text-center">
-                                            <h4 className="text-primary mb-1">8</h4>
-                                            <small className="text-muted">Matches This Month</small>
+                                    {/* Filters Row - Now inside the card */}
+                                    <Row className="mb-3">
+                                        <Col md={3}>
+                                            <Form.Group>
+                                                <Form.Label className="small fw-bold">Results</Form.Label>
+                                                <Form.Select 
+                                                    size="sm"
+                                                    value={resultFilter} 
+                                                    onChange={(e) => handleFilterChange('result', e.target.value)}
+                                                >
+                                                    <option value="all">All Results</option>
+                                                    <option value="won">Wins Only</option>
+                                                    <option value="lost">Losses Only</option>
+                                                </Form.Select>
+                                            </Form.Group>
                                         </Col>
-                                        <Col md={3} className="text-center">
-                                            <h4 className="text-success mb-1">5</h4>
-                                            <small className="text-muted">Wins</small>
+                                        <Col md={3}>
+                                            <Form.Group>
+                                                <Form.Label className="small fw-bold">Players</Form.Label>
+                                                <Form.Select 
+                                                    size="sm"
+                                                    value={playerFilter} 
+                                                    onChange={(e) => handleFilterChange('player', e.target.value)}
+                                                >
+                                                    <option value="all">All Players</option>
+                                                    {uniqueOpponents.map(opponent => (
+                                                        <option key={opponent} value={opponent}>{opponent}</option>
+                                                    ))}
+                                                </Form.Select>
+                                            </Form.Group>
                                         </Col>
-                                        <Col md={3} className="text-center">
-                                            <h4 className="text-danger mb-1">3</h4>
-                                            <small className="text-muted">Losses</small>
+                                        <Col md={3}>
+                                            <Form.Group>
+                                                <Form.Label className="small fw-bold">Date Range</Form.Label>
+                                                <Form.Select 
+                                                    size="sm"
+                                                    value={dateRange} 
+                                                    onChange={(e) => handleFilterChange('dateRange', e.target.value)}
+                                                >
+                                                    <option value="all">All Time</option>
+                                                    <option value="week">Last Week</option>
+                                                    <option value="month">Last Month</option>
+                                                    <option value="3months">Last 3 Months</option>
+                                                </Form.Select>
+                                            </Form.Group>
                                         </Col>
-                                        <Col md={3} className="text-center">
-                                            <h4 className="text-warning mb-1">63%</h4>
-                                            <small className="text-muted">Win Rate</small>
+                                        <Col md={3}>
+                                            <Form.Group>
+                                                <Form.Label className="small fw-bold">Search</Form.Label>
+                                                <InputGroup size="sm">
+                                                    <Form.Control
+                                                        type="text"
+                                                        placeholder="Search matches..."
+                                                        value={searchTerm}
+                                                        onChange={(e) => handleFilterChange('search', e.target.value)}
+                                                    />
+                                                    <InputGroup.Text>
+                                                        <i className="bi bi-search"></i>
+                                                    </InputGroup.Text>
+                                                </InputGroup>
+                                            </Form.Group>
                                         </Col>
                                     </Row>
+
+                                    {/* Match Table */}
+                                    {currentMatches.length > 0 ? (
+                                        <>
+                                            <Table responsive hover className="align-middle mb-4">
+                                                <thead className="table-light">
+                                                    <tr>
+                                                        <th>Date</th>
+                                                        <th>Opponent</th>
+                                                        <th>Score</th>
+                                                        <th>Result</th>
+                                                        <th>Details</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {currentMatches.map(match => (
+                                                        <tr key={match.id}>
+                                                            <td>{match.date}</td>
+                                                            <td>
+                                                                <div className="d-flex align-items-center">
+                                                                    <UserAvatar 
+                                                                        user={{ 
+                                                                            displayName: match.opponent,
+                                                                            photoURL: match.opponentAvatar 
+                                                                        }} 
+                                                                        size={32} 
+                                                                        className="me-2"
+                                                                    />
+                                                                    <span>{match.opponent}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="fw-bold">{match.score}</td>
+                                                            <td>
+                                                                <Badge bg={match.result === 'Won' ? 'success' : 'danger'}>
+                                                                    {match.result}
+                                                                </Badge>
+                                                            </td>
+                                                            <td className="text-muted">{match.details}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </Table>
+                                            
+                                            {/* Pagination */}
+                                            {renderPagination()}
+                                        </>
+                                    ) : (
+                                        <div className="text-center py-4">
+                                            <i className="bi bi-search fs-1 text-muted d-block mb-2"></i>
+                                            <p className="text-muted mb-0">No matches found</p>
+                                            <small className="text-muted">Try adjusting your filters</small>
+                                        </div>
+                                    )}
+                                </Card.Body>
+                            </Card>
+                        </Col>
+
+                        {/* Monthly Summary Card */}
+                        <Col lg={3}>
+                            <Card>
+                                <Card.Header>
+                                    <h6 className="mb-0">
+                                        <i className="bi bi-calendar-month me-2"></i>
+                                        Monthly Summary
+                                    </h6>
+                                </Card.Header>
+                                <Card.Body>
+                                    <div className="text-center">
+                                        <h6 className="text-muted mb-3">{monthlySummary.month}</h6>
+                                        
+                                        <div className="mb-3">
+                                            <h3 className="text-primary mb-0">{monthlySummary.total}</h3>
+                                            <small className="text-muted">Total Matches</small>
+                                        </div>
+
+                                        <div className="row g-2 mb-3">
+                                            <div className="col-6">
+                                                <div className="border rounded p-2">
+                                                    <h5 className="text-success mb-0">{monthlySummary.wins}</h5>
+                                                    <small className="text-muted">Wins</small>
+                                                </div>
+                                            </div>
+                                            <div className="col-6">
+                                                <div className="border rounded p-2">
+                                                    <h5 className="text-danger mb-0">{monthlySummary.losses}</h5>
+                                                    <small className="text-muted">Losses</small>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mb-3">
+                                            <h4 className="text-primary mb-0">{monthlySummary.winRate}%</h4>
+                                            <small className="text-muted">Win Rate</small>
+                                        </div>
+
+                                        <Badge 
+                                            bg={monthlySummary.winRate >= winRate ? 'success' : 'warning'}
+                                            className="w-100"
+                                        >
+                                            {monthlySummary.winRate >= winRate ? 
+                                                `↗ ${monthlySummary.winRate - winRate}% above average` : 
+                                                `↘ ${winRate - monthlySummary.winRate}% below average`
+                                            }
+                                        </Badge>
+                                    </div>
                                 </Card.Body>
                             </Card>
                         </Col>
@@ -581,3 +885,4 @@ const History = () => {
 };
 
 export default History;
+
