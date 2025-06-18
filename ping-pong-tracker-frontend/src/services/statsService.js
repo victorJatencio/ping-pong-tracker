@@ -24,6 +24,435 @@ class StatsService {
    * @param {string} playerId - The player's UID
    * @returns {Object} Player statistics object
    */
+  // New section
+
+  async getPlayerProfileStats(playerId) {
+  try {
+    console.log('Getting profile stats for player:', playerId);
+    
+    // Get basic stats from playerStats collection
+    const statsRef = doc(db, 'playerStats', playerId);
+    const statsDoc = await getDoc(statsRef);
+    
+    if (!statsDoc.exists()) {
+      console.log('No player stats found, calculating initial statistics...');
+      // Calculate stats if they don't exist
+      return await this.calculatePlayerStats(playerId);
+    }
+    
+    const basicStats = statsDoc.data();
+    console.log('Basic stats found:', basicStats);
+    
+    // Get detailed match history for profile-specific calculations
+    const matchesRef = collection(db, 'matches');
+    const playerMatchesQuery = query(
+      matchesRef,
+      where('status', '==', 'completed')
+    );
+    
+    const querySnapshot = await getDocs(playerMatchesQuery);
+    const allMatches = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    const playerMatches = allMatches.filter(match => 
+      match.player1Id === playerId || match.player2Id === playerId
+    );
+
+    console.log('Found player matches:', playerMatches.length);
+
+    // Calculate profile-specific statistics
+    const profileStats = {
+      ...basicStats,
+      
+      // Performance trends (last 30 days)
+      performanceTrend: this.calculatePerformanceTrend(playerMatches, playerId, 30),
+      
+      // Opponent analysis
+      opponentStats: this.calculateOpponentStats(playerMatches, playerId),
+      
+      // Time-based performance
+      timeBasedStats: this.calculateTimeBasedStats(playerMatches, playerId),
+      
+      // Achievement progress
+      achievements: this.calculateAchievements(playerMatches, playerId, basicStats),
+      
+      // Detailed recent form (last 10 matches)
+      detailedRecentForm: this.getDetailedRecentForm(playerMatches, playerId, 10),
+      
+      // Performance by day of week
+      dayOfWeekStats: this.calculateDayOfWeekStats(playerMatches, playerId),
+      
+      // Score analysis
+      scoreAnalysis: this.calculateScoreAnalysis(playerMatches, playerId)
+    };
+
+    console.log('Profile stats calculated successfully');
+    return profileStats;
+  } catch (error) {
+    console.error('Error getting player profile stats:', error);
+    throw error;
+  }
+}
+
+/**
+ * Calculate performance trend over specified days
+ * @param {Array} matches - Player's matches
+ * @param {string} playerId - Player's UID
+ * @param {number} days - Number of days to analyze
+ */
+calculatePerformanceTrend(matches, playerId, days) {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    const recentMatches = matches.filter(match => 
+      new Date(match.completedDate?.toDate()) >= cutoffDate
+    ).sort((a, b) => new Date(a.completedDate?.toDate()) - new Date(b.completedDate?.toDate()));
+
+    if (recentMatches.length === 0) {
+      return [];
+    }
+
+    // Group by week for trend analysis
+    const weeklyData = {};
+    recentMatches.forEach(match => {
+      const date = new Date(match.completedDate?.toDate());
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - date.getDay());
+      const weekKey = weekStart.toISOString().split('T')[0];
+      
+      if (!weeklyData[weekKey]) {
+        weeklyData[weekKey] = { wins: 0, losses: 0, matches: 0 };
+      }
+      
+      weeklyData[weekKey].matches++;
+      if (match.winnerId === playerId) {
+        weeklyData[weekKey].wins++;
+      } else {
+        weeklyData[weekKey].losses++;
+      }
+    });
+
+    // Convert to array with win rates
+    return Object.entries(weeklyData).map(([week, stats]) => ({
+      week,
+      winRate: stats.matches > 0 ? Math.round((stats.wins / stats.matches) * 100) : 0,
+      matches: stats.matches
+    }));
+  } catch (error) {
+    console.error('Error calculating performance trend:', error);
+    return [];
+  }
+}
+
+/**
+ * Calculate statistics against different opponents
+ * @param {Array} matches - Player's matches
+ * @param {string} playerId - Player's UID
+ */
+calculateOpponentStats(matches, playerId) {
+  try {
+    const opponentStats = {};
+    
+    matches.forEach(match => {
+      const opponentId = match.player1Id === playerId ? match.player2Id : match.player1Id;
+      
+      if (!opponentStats[opponentId]) {
+        opponentStats[opponentId] = {
+          wins: 0,
+          losses: 0,
+          matches: 0,
+          totalPointsFor: 0,
+          totalPointsAgainst: 0
+        };
+      }
+      
+      const stats = opponentStats[opponentId];
+      stats.matches++;
+      
+      const isPlayer1 = match.player1Id === playerId;
+      const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
+      const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+      
+      stats.totalPointsFor += playerScore;
+      stats.totalPointsAgainst += opponentScore;
+      
+      if (match.winnerId === playerId) {
+        stats.wins++;
+      } else {
+        stats.losses++;
+      }
+      
+      stats.winRate = Math.round((stats.wins / stats.matches) * 100);
+      stats.avgPointsFor = Math.round((stats.totalPointsFor / stats.matches) * 10) / 10;
+      stats.avgPointsAgainst = Math.round((stats.totalPointsAgainst / stats.matches) * 10) / 10;
+    });
+    
+    return opponentStats;
+  } catch (error) {
+    console.error('Error calculating opponent stats:', error);
+    return {};
+  }
+}
+
+/**
+ * Calculate time-based performance statistics
+ * @param {Array} matches - Player's matches
+ * @param {string} playerId - Player's UID
+ */
+calculateTimeBasedStats(matches, playerId) {
+  try {
+    const timeStats = {
+      morning: { wins: 0, losses: 0, matches: 0 }, // 6-12
+      afternoon: { wins: 0, losses: 0, matches: 0 }, // 12-18
+      evening: { wins: 0, losses: 0, matches: 0 } // 18-24
+    };
+    
+    matches.forEach(match => {
+      const hour = new Date(match.completedDate?.toDate()).getHours();
+      let timeSlot;
+      
+      if (hour >= 6 && hour < 12) timeSlot = 'morning';
+      else if (hour >= 12 && hour < 18) timeSlot = 'afternoon';
+      else timeSlot = 'evening';
+      
+      timeStats[timeSlot].matches++;
+      if (match.winnerId === playerId) {
+        timeStats[timeSlot].wins++;
+      } else {
+        timeStats[timeSlot].losses++;
+      }
+    });
+    
+    // Calculate win rates
+    Object.keys(timeStats).forEach(timeSlot => {
+      const stats = timeStats[timeSlot];
+      stats.winRate = stats.matches > 0 ? Math.round((stats.wins / stats.matches) * 100) : 0;
+    });
+    
+    return timeStats;
+  } catch (error) {
+    console.error('Error calculating time-based stats:', error);
+    return {
+      morning: { wins: 0, losses: 0, matches: 0, winRate: 0 },
+      afternoon: { wins: 0, losses: 0, matches: 0, winRate: 0 },
+      evening: { wins: 0, losses: 0, matches: 0, winRate: 0 }
+    };
+  }
+}
+
+/**
+ * Calculate achievements and progress
+ * @param {Array} matches - Player's matches
+ * @param {string} playerId - Player's UID
+ * @param {Object} basicStats - Basic player statistics
+ */
+calculateAchievements(matches, playerId, basicStats) {
+  try {
+    const achievements = [];
+    
+    // Win-based achievements
+    if (basicStats.totalWins >= 1) achievements.push({ 
+      id: 'first_win', 
+      name: 'First Victory', 
+      description: 'Won your first match', 
+      unlocked: true 
+    });
+    if (basicStats.totalWins >= 5) achievements.push({ 
+      id: 'five_wins', 
+      name: 'Getting Started', 
+      description: 'Won 5 matches', 
+      unlocked: true 
+    });
+    if (basicStats.totalWins >= 10) achievements.push({ 
+      id: 'ten_wins', 
+      name: 'Double Digits', 
+      description: 'Won 10 matches', 
+      unlocked: true 
+    });
+    if (basicStats.totalWins >= 25) achievements.push({ 
+      id: 'quarter_century', 
+      name: 'Quarter Century', 
+      description: 'Won 25 matches', 
+      unlocked: true 
+    });
+    if (basicStats.totalWins >= 50) achievements.push({ 
+      id: 'half_century', 
+      name: 'Half Century', 
+      description: 'Won 50 matches', 
+      unlocked: true 
+    });
+    
+    // Streak-based achievements
+    if (basicStats.currentStreak >= 3 && basicStats.streakType === 'wins') {
+      achievements.push({ 
+        id: 'three_streak', 
+        name: 'Hot Streak', 
+        description: 'Won 3 matches in a row', 
+        unlocked: true 
+      });
+    }
+    if (basicStats.currentStreak >= 5 && basicStats.streakType === 'wins') {
+      achievements.push({ 
+        id: 'five_streak', 
+        name: 'On Fire', 
+        description: 'Won 5 matches in a row', 
+        unlocked: true 
+      });
+    }
+    
+    // Win rate achievements
+    if (basicStats.winRate >= 70 && basicStats.totalMatches >= 10) {
+      achievements.push({ 
+        id: 'high_win_rate', 
+        name: 'Dominator', 
+        description: '70%+ win rate with 10+ matches', 
+        unlocked: true 
+      });
+    }
+    
+    // Activity achievements
+    if (basicStats.totalMatches >= 20) {
+      achievements.push({ 
+        id: 'active_player', 
+        name: 'Active Player', 
+        description: 'Played 20+ matches', 
+        unlocked: true 
+      });
+    }
+    
+    return achievements;
+  } catch (error) {
+    console.error('Error calculating achievements:', error);
+    return [];
+  }
+}
+
+/**
+ * Get detailed recent form with match details
+ * @param {Array} matches - Player's matches
+ * @param {string} playerId - Player's UID
+ * @param {number} count - Number of recent matches to analyze
+ */
+getDetailedRecentForm(matches, playerId, count = 10) {
+  try {
+    return matches
+      .sort((a, b) => new Date(b.completedDate?.toDate()) - new Date(a.completedDate?.toDate()))
+      .slice(0, count)
+      .map(match => {
+        const isPlayer1 = match.player1Id === playerId;
+        const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
+        const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+        const opponentId = isPlayer1 ? match.player2Id : match.player1Id;
+        
+        return {
+          matchId: match.id,
+          date: match.completedDate,
+          won: match.winnerId === playerId,
+          playerScore,
+          opponentScore,
+          opponentId,
+          location: match.location,
+          scoreDiff: playerScore - opponentScore
+        };
+      });
+  } catch (error) {
+    console.error('Error getting detailed recent form:', error);
+    return [];
+  }
+}
+
+/**
+ * Calculate performance by day of week
+ * @param {Array} matches - Player's matches
+ * @param {string} playerId - Player's UID
+ */
+calculateDayOfWeekStats(matches, playerId) {
+  try {
+    const dayStats = {
+      0: { wins: 0, losses: 0, matches: 0, name: 'Sunday' },
+      1: { wins: 0, losses: 0, matches: 0, name: 'Monday' },
+      2: { wins: 0, losses: 0, matches: 0, name: 'Tuesday' },
+      3: { wins: 0, losses: 0, matches: 0, name: 'Wednesday' },
+      4: { wins: 0, losses: 0, matches: 0, name: 'Thursday' },
+      5: { wins: 0, losses: 0, matches: 0, name: 'Friday' },
+      6: { wins: 0, losses: 0, matches: 0, name: 'Saturday' }
+    };
+    
+    matches.forEach(match => {
+      const dayOfWeek = new Date(match.completedDate?.toDate()).getDay();
+      dayStats[dayOfWeek].matches++;
+      
+      if (match.winnerId === playerId) {
+        dayStats[dayOfWeek].wins++;
+      } else {
+        dayStats[dayOfWeek].losses++;
+      }
+    });
+    
+    // Calculate win rates
+    Object.keys(dayStats).forEach(day => {
+      const stats = dayStats[day];
+      stats.winRate = stats.matches > 0 ? Math.round((stats.wins / stats.matches) * 100) : 0;
+    });
+    
+    return dayStats;
+  } catch (error) {
+    console.error('Error calculating day of week stats:', error);
+    return {};
+  }
+}
+
+/**
+ * Calculate score analysis
+ * @param {Array} matches - Player's matches
+ * @param {string} playerId - Player's UID
+ */
+calculateScoreAnalysis(matches, playerId) {
+  try {
+    let totalPointsFor = 0;
+    let totalPointsAgainst = 0;
+    let closeMatches = 0; // Matches decided by 3 points or less
+    let blowouts = 0; // Matches decided by 10+ points
+    
+    matches.forEach(match => {
+      const isPlayer1 = match.player1Id === playerId;
+      const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
+      const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+      
+      totalPointsFor += playerScore;
+      totalPointsAgainst += opponentScore;
+      
+      const scoreDiff = Math.abs(playerScore - opponentScore);
+      if (scoreDiff <= 3) closeMatches++;
+      if (scoreDiff >= 10) blowouts++;
+    });
+    
+    return {
+      avgPointsFor: matches.length > 0 ? Math.round((totalPointsFor / matches.length) * 10) / 10 : 0,
+      avgPointsAgainst: matches.length > 0 ? Math.round((totalPointsAgainst / matches.length) * 10) / 10 : 0,
+      closeMatches,
+      blowouts,
+      closeMatchRate: matches.length > 0 ? Math.round((closeMatches / matches.length) * 100) : 0,
+      blowoutRate: matches.length > 0 ? Math.round((blowouts / matches.length) * 100) : 0
+    };
+  } catch (error) {
+    console.error('Error calculating score analysis:', error);
+    return {
+      avgPointsFor: 0,
+      avgPointsAgainst: 0,
+      closeMatches: 0,
+      blowouts: 0,
+      closeMatchRate: 0,
+      blowoutRate: 0
+    };
+  }
+}
+
+
+  // last section
   async calculatePlayerStats(playerId) {
     try {
       // Fetch all completed matches for this player
