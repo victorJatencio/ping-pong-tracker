@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Container, Row, Col, Card, Button, Badge, Table, ProgressBar } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
@@ -12,6 +12,12 @@ import {
     Legend,
 } from 'chart.js';
 import OngoingMatches from '../../components/match/OngoingMatches';
+import statsService from '../../services/statsService';
+import { db } from '../../config/firebase';
+import { 
+    collection, 
+    getDocs 
+} from 'firebase/firestore';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -19,6 +25,21 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 const Dashboard = () => {
     const { currentUser } = useAuth();
     
+    // State for real data
+    const [dashboardData, setDashboardData] = useState({
+        userStats: null,
+        recentMatches: [],
+        upcomingMatches: [],
+        pendingInvitations: [],
+        achievements: [],
+        leaderboardPreview: [],
+        recentActivity: [],
+        todaySchedule: [],
+        performanceTrends: null
+    });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
     // Get user's first name for personalized greeting
     const getFirstName = (user) => {
         if (user?.displayName) {
@@ -32,68 +53,294 @@ const Dashboard = () => {
 
     const firstName = getFirstName(currentUser);
 
-    // Mock data - replace with actual data from your backend
-    const userStats = {
-        totalMatches: 15,
-        wins: 10,
-        losses: 5,
-        winRate: 67,
-        currentStreak: 3,
-        streakType: 'wins',
-        rank: 3,
-        totalPlayers: 24
+    // Simplified data loading without complex queries
+    useEffect(() => {
+        if (!currentUser?.uid) return;
+
+        const loadDashboardData = async () => {
+            try {
+                setLoading(true);
+                setError('');
+
+                console.log('Loading dashboard data for user:', currentUser.uid);
+
+                // Load user statistics
+                const userStats = await statsService.getPlayerProfileStats(currentUser.uid);
+                console.log('User stats loaded:', userStats);
+                
+                // Load ALL matches and filter in JavaScript (no complex queries)
+                const allMatchesSnapshot = await getDocs(collection(db, 'matches'));
+                const allMatches = [];
+                allMatchesSnapshot.forEach(doc => {
+                    allMatches.push({ id: doc.id, ...doc.data() });
+                });
+                console.log('All matches loaded:', allMatches.length);
+
+                // Filter matches for current user
+                const userMatches = allMatches.filter(match => 
+                    match.player1Id === currentUser.uid || match.player2Id === currentUser.uid
+                );
+                console.log('User matches found:', userMatches.length);
+
+                // Get recent completed matches
+                const completedMatches = userMatches.filter(match => match.status === 'completed');
+                const recentMatches = completedMatches
+                    .sort((a, b) => {
+                        const dateA = a.completedDate?.toDate() || new Date(0);
+                        const dateB = b.completedDate?.toDate() || new Date(0);
+                        return dateB - dateA;
+                    })
+                    .slice(0, 3);
+                console.log('Recent matches:', recentMatches.length);
+
+                // Get upcoming matches
+                const scheduledMatches = userMatches.filter(match => 
+                    match.status === 'scheduled' || match.status === 'in-progress'
+                );
+                const upcomingMatches = scheduledMatches
+                    .sort((a, b) => {
+                        const dateA = a.scheduledDate?.toDate() || new Date();
+                        const dateB = b.scheduledDate?.toDate() || new Date();
+                        return dateA - dateB;
+                    })
+                    .slice(0, 5);
+                console.log('Upcoming matches:', upcomingMatches.length);
+
+                // Load users for opponent names
+                const usersSnapshot = await getDocs(collection(db, 'users'));
+                const usersMap = {};
+                usersSnapshot.forEach(doc => {
+                    usersMap[doc.id] = { id: doc.id, ...doc.data() };
+                });
+                console.log('Users loaded:', Object.keys(usersMap).length);
+
+                // Process recent matches with opponent names
+                const processedRecentMatches = recentMatches.map(match => {
+                    const opponentId = match.player1Id === currentUser.uid ? match.player2Id : match.player1Id;
+                    const opponent = usersMap[opponentId];
+                    const isWinner = match.winnerId === currentUser.uid;
+                    
+                    return {
+                        id: match.id,
+                        opponent: opponent?.name || opponent?.email || 'Unknown',
+                        result: isWinner ? 'Won' : 'Lost',
+                        score: `${match.player1Score}-${match.player2Score}`,
+                        date: match.completedDate ? formatRelativeDate(match.completedDate.toDate()) : 'Recently'
+                    };
+                });
+
+                // Process upcoming matches with opponent names
+                const processedUpcomingMatches = upcomingMatches.map(match => {
+                    const opponentId = match.player1Id === currentUser.uid ? match.player2Id : match.player1Id;
+                    const opponent = usersMap[opponentId];
+                    
+                    return {
+                        id: match.id,
+                        opponent: opponent?.name || opponent?.email || 'Unknown',
+                        time: match.scheduledDate ? formatScheduledTime(match.scheduledDate.toDate()) : 'TBD',
+                        location: match.location || 'TBD'
+                    };
+                });
+
+                // Load leaderboard preview (simplified)
+                let leaderboardPreview = [];
+                try {
+                    const leaderboardData = await statsService.calculateLeaderboard();
+                    leaderboardPreview = leaderboardData.slice(0, 3).map((player, index) => ({
+                        rank: index + 1,
+                        name: player.id === currentUser.uid ? 'You' : (usersMap[player.id]?.name || 'Player'),
+                        wins: player.totalWins || 0,
+                        isCurrentUser: player.id === currentUser.uid
+                    }));
+                } catch (leaderboardError) {
+                    console.log('Leaderboard calculation failed, using fallback');
+                    // Fallback leaderboard based on user stats
+                    leaderboardPreview = [
+                        {
+                            rank: userStats?.rank || 1,
+                            name: 'You',
+                            wins: userStats?.totalWins || 0,
+                            isCurrentUser: true
+                        }
+                    ];
+                }
+
+                // Generate achievements based on user stats
+                const achievements = generateAchievements(userStats);
+
+                // Generate recent activity
+                const recentActivity = generateRecentActivity(processedRecentMatches, userStats);
+
+                // Today's schedule (matches scheduled for today)
+                const today = new Date();
+                const todaySchedule = processedUpcomingMatches.filter(match => {
+                    if (!match.time || match.time === 'TBD') return false;
+                    return match.time.includes('Today');
+                });
+
+                console.log('Dashboard data processed successfully');
+
+                setDashboardData({
+                    userStats,
+                    recentMatches: processedRecentMatches,
+                    upcomingMatches: processedUpcomingMatches,
+                    pendingInvitations: [], // TODO: Implement invitations system
+                    achievements,
+                    leaderboardPreview,
+                    recentActivity,
+                    todaySchedule,
+                    performanceTrends: userStats
+                });
+
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                setError(`Failed to load dashboard data: ${error.message}`);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadDashboardData();
+    }, [currentUser?.uid]);
+
+    // Helper functions
+    const formatRelativeDate = (date) => {
+        const now = new Date();
+        const diffTime = Math.abs(now - date);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 1) return 'Today';
+        if (diffDays === 2) return 'Yesterday';
+        if (diffDays <= 7) return `${diffDays - 1} days ago`;
+        return date.toLocaleDateString();
     };
 
-    const recentMatches = [
-        { id: 1, opponent: 'Jane', result: 'Won', score: '21-15', date: 'Today' },
-        { id: 2, opponent: 'Mike', result: 'Lost', score: '18-21', date: 'Yesterday' },
-        { id: 3, opponent: 'Sarah', result: 'Won', score: '21-19', date: '2 days ago' }
-    ];
+    const formatScheduledTime = (date) => {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const matchDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        
+        const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        if (matchDate.getTime() === today.getTime()) {
+            return `Today, ${timeString}`;
+        } else if (matchDate.getTime() === tomorrow.getTime()) {
+            return `Tomorrow, ${timeString}`;
+        } else {
+            return `${date.toLocaleDateString()}, ${timeString}`;
+        }
+    };
 
-    const upcomingMatches = [
-        { id: 1, opponent: 'Sarah', time: 'Today, 5:00 PM' },
-        { id: 2, opponent: 'Tom', time: 'Tomorrow, 3:30 PM' }
-    ];
+    const generateAchievements = (userStats) => {
+        const achievements = [
+            { 
+                id: 1, 
+                title: 'First Win', 
+                icon: 'bi-star', 
+                unlocked: (userStats?.totalWins || 0) >= 1 
+            },
+            { 
+                id: 2, 
+                title: '5 Wins', 
+                icon: 'bi-trophy', 
+                unlocked: (userStats?.totalWins || 0) >= 5 
+            },
+            { 
+                id: 3, 
+                title: 'Win Streak', 
+                icon: 'bi-fire', 
+                unlocked: (userStats?.currentStreak || 0) >= 3 && userStats?.streakType === 'wins'
+            },
+            { 
+                id: 4, 
+                title: '10 Games', 
+                icon: 'bi-controller', 
+                unlocked: (userStats?.totalMatches || 0) >= 10 
+            },
+            { 
+                id: 5, 
+                title: 'High Win Rate', 
+                icon: 'bi-gem', 
+                unlocked: (userStats?.winRate || 0) >= 70 
+            }
+        ];
+        return achievements;
+    };
 
-    const pendingInvitations = [
-        { id: 1, from: 'Alex', time: 'Today, 7:00 PM' },
-        { id: 2, from: 'Lisa', time: 'Tomorrow, 1:00 PM' }
-    ];
+    const generateRecentActivity = (recentMatches, userStats) => {
+        const activity = [];
+        
+        // Add recent match activities
+        recentMatches.slice(0, 2).forEach((match, index) => {
+            activity.push({
+                id: `match_${index}`,
+                type: match.result === 'Won' ? 'match_won' : 'match_lost',
+                description: `You ${match.result.toLowerCase()} a match against ${match.opponent}`,
+                time: match.date,
+                icon: match.result === 'Won' ? 'bi-trophy-fill' : 'bi-x-circle-fill',
+                color: match.result === 'Won' ? 'success' : 'danger'
+            });
+        });
 
-    const achievements = [
-        { id: 1, title: '5 wins', icon: 'bi-trophy', unlocked: true },
-        { id: 2, title: '3 streaks', icon: 'bi-fire', unlocked: true },
-        { id: 3, title: '10 games', icon: 'bi-controller', unlocked: true },
-        { id: 4, title: 'First Win', icon: 'bi-star', unlocked: true },
-        { id: 5, title: '20 games', icon: 'bi-gem', unlocked: false }
-    ];
+        // Add achievement activity if user has achievements
+        if (userStats?.totalWins >= 5) {
+            activity.push({
+                id: 'achievement_5wins',
+                type: 'achievement',
+                description: 'You unlocked the "5 Wins" achievement',
+                time: 'Recently',
+                icon: 'bi-star-fill',
+                color: 'warning'
+            });
+        }
 
-    const leaderboardPreview = [
-        { rank: 1, name: 'Mike', wins: 15, isCurrentUser: false },
-        { rank: 2, name: 'Jane', wins: 12, isCurrentUser: false },
-        { rank: 3, name: 'You', wins: 10, isCurrentUser: true }
-    ];
+        // Add ranking activity
+        if (userStats?.rank) {
+            activity.push({
+                id: 'ranking',
+                type: 'leaderboard',
+                description: `You are currently ranked #${userStats.rank}`,
+                time: 'Current',
+                icon: 'bi-bar-chart-fill',
+                color: 'info'
+            });
+        }
 
-    const recentActivity = [
-        { id: 1, type: 'match_won', description: 'You won a match against Jane', time: '10 minutes ago', icon: 'bi-trophy-fill', color: 'success' },
-        { id: 2, type: 'leaderboard', description: 'Mike is now #1 on the leaderboard', time: '2 hours ago', icon: 'bi-bar-chart-fill', color: 'info' },
-        { id: 3, type: 'achievement', description: 'You received a new achievement: \'3 Win Streak\'', time: 'Yesterday', icon: 'bi-star-fill', color: 'warning' },
-        { id: 4, type: 'invitation', description: 'Sarah accepted your match invitation', time: 'Yesterday', icon: 'bi-check-circle-fill', color: 'primary' }
-    ];
+        return activity.slice(0, 4);
+    };
+
+    // Use real data or fallback to loading/empty states
+    const {
+        userStats,
+        recentMatches,
+        upcomingMatches,
+        pendingInvitations,
+        achievements,
+        leaderboardPreview,
+        recentActivity,
+        todaySchedule,
+        performanceTrends
+    } = dashboardData;
 
     // Win/Loss ratio chart data
-    const chartData = {
-        labels: ['Wins', 'Losses'],
-        datasets: [
-            {
-                data: [userStats.wins, userStats.losses],
-                backgroundColor: ['#28a745', '#dc3545'],
-                borderColor: ['#ffffff', '#ffffff'],
-                borderWidth: 3,
-                hoverBackgroundColor: ['#34ce57', '#e55353'],
-            },
-        ],
-    };
+    const chartData = useMemo(() => {
+        if (!userStats || (!userStats.totalWins && !userStats.totalLosses)) return null;
+        
+        return {
+            labels: ['Wins', 'Losses'],
+            datasets: [
+                {
+                    data: [userStats.totalWins || 0, userStats.totalLosses || 0],
+                    backgroundColor: ['#28a745', '#dc3545'],
+                    borderColor: ['#ffffff', '#ffffff'],
+                    borderWidth: 3,
+                    hoverBackgroundColor: ['#34ce57', '#e55353'],
+                },
+            ],
+        };
+    }, [userStats]);
 
     const chartOptions = {
         responsive: true,
@@ -108,7 +355,7 @@ const Dashboard = () => {
                         const label = context.label || '';
                         const value = context.parsed;
                         const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                        const percentage = Math.round((value / total) * 100);
+                        const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
                         return `${label}: ${value} (${percentage}%)`;
                     }
                 }
@@ -118,14 +365,65 @@ const Dashboard = () => {
     };
 
     const handleAcceptInvitation = (invitationId) => {
-        // TODO: Implement accept invitation functionality
         console.log('Accept invitation:', invitationId);
     };
 
     const handleDeclineInvitation = (invitationId) => {
-        // TODO: Implement decline invitation functionality
         console.log('Decline invitation:', invitationId);
     };
+
+    if (loading) {
+        return (
+            <div className="dashboard-page">
+                <Jumbotron
+                    title={`Welcome back, ${firstName}!`}
+                    subtitle="Loading your dashboard..."
+                    backgroundImage="https://images.unsplash.com/photo-1551698618-1dfe5d97d256?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+                    height="300px"
+                    overlay={true}
+                    textAlign="left"
+                    fullWidth={true}
+                />
+                <div className="jumbotron-overlap-container">
+                    <Container className="py-5">
+                        <div className="text-center">
+                            <div className="spinner-border text-primary" role="status">
+                                <span className="visually-hidden">Loading...</span>
+                            </div>
+                            <p className="mt-3 text-muted">Loading your dashboard data...</p>
+                        </div>
+                    </Container>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="dashboard-page">
+                <Jumbotron
+                    title={`Welcome back, ${firstName}!`}
+                    subtitle="There was an error loading your dashboard"
+                    backgroundImage="https://images.unsplash.com/photo-1551698618-1dfe5d97d256?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+                    height="300px"
+                    overlay={true}
+                    textAlign="left"
+                    fullWidth={true}
+                />
+                <div className="jumbotron-overlap-container">
+                    <Container className="py-5">
+                        <div className="alert alert-danger text-center">
+                            <h5>Error Loading Dashboard</h5>
+                            <p>{error}</p>
+                            <Button variant="primary" onClick={() => window.location.reload()}>
+                                Try Again
+                            </Button>
+                        </div>
+                    </Container>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="dashboard-page">
@@ -152,25 +450,35 @@ const Dashboard = () => {
                                     <h5 className="mb-0">Win/Loss Ratio</h5>
                                 </Card.Header>
                                 <Card.Body>
-                                    <div style={{ height: '200px', position: 'relative' }}>
-                                        <Doughnut data={chartData} options={chartOptions} />
-                                        <div className="chart-center-text">
-                                            <h3 className="text-success mb-0">{userStats.winRate}%</h3>
-                                            <small className="text-muted">Win Rate</small>
+                                    {chartData && userStats ? (
+                                        <>
+                                            <div style={{ height: '200px', position: 'relative' }}>
+                                                <Doughnut data={chartData} options={chartOptions} />
+                                                <div className="chart-center-text">
+                                                    <h3 className="text-success mb-0">{userStats.winRate || 0}%</h3>
+                                                    <small className="text-muted">Win Rate</small>
+                                                </div>
+                                            </div>
+                                            <div className="mt-3">
+                                                <div className="d-flex justify-content-between">
+                                                    <span className="text-success">
+                                                        <i className="bi bi-circle-fill me-1"></i>
+                                                        Wins: {userStats.totalWins || 0}
+                                                    </span>
+                                                    <span className="text-danger">
+                                                        <i className="bi bi-circle-fill me-1"></i>
+                                                        Losses: {userStats.totalLosses || 0}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="text-center py-4">
+                                            <i className="bi bi-pie-chart fs-1 text-muted d-block mb-2"></i>
+                                            <p className="text-muted mb-0">No match data yet</p>
+                                            <small className="text-muted">Play some matches to see your stats!</small>
                                         </div>
-                                    </div>
-                                    <div className="mt-3">
-                                        <div className="d-flex justify-content-between">
-                                            <span className="text-success">
-                                                <i className="bi bi-circle-fill me-1"></i>
-                                                Wins: {userStats.wins}
-                                            </span>
-                                            <span className="text-danger">
-                                                <i className="bi bi-circle-fill me-1"></i>
-                                                Losses: {userStats.losses}
-                                            </span>
-                                        </div>
-                                    </div>
+                                    )}
                                 </Card.Body>
                             </Card>
                         </Col>
@@ -184,7 +492,7 @@ const Dashboard = () => {
                                 <Card.Body>
                                     {recentMatches.length > 0 ? (
                                         <div className="list-group list-group-flush">
-                                            {recentMatches.map((match ) => (
+                                            {recentMatches.map((match) => (
                                                 <div key={match.id} className="list-group-item border-0 px-0 py-2">
                                                     <div className="d-flex justify-content-between align-items-center">
                                                         <div className="d-flex align-items-center">
@@ -221,7 +529,7 @@ const Dashboard = () => {
                                     )}
                                 </Card.Body>
                                 <Card.Footer>
-                                    <Link to="/matches" className="text-decoration-none">
+                                    <Link to="/history" className="text-decoration-none">
                                         View All Matches <i className="bi bi-arrow-right"></i>
                                     </Link>
                                 </Card.Footer>
@@ -250,11 +558,13 @@ const Dashboard = () => {
                                         ))}
                                     </Row>
                                     <div className="mt-3">
-                                        <ProgressBar 
-                                            now={75} 
-                                            label="75% to next achievement"
-                                            className="achievement-progress"
-                                        />
+                                        {userStats && (
+                                            <ProgressBar 
+                                                now={Math.min(((userStats.totalMatches || 0) / 10) * 100, 100)} 
+                                                label={`${Math.min(((userStats.totalMatches || 0) / 10) * 100, 100).toFixed(0)}% to "10 Games"`}
+                                                className="achievement-progress"
+                                            />
+                                        )}
                                     </div>
                                 </Card.Body>
                                 <Card.Footer>
@@ -277,7 +587,7 @@ const Dashboard = () => {
                                 <Card.Body>
                                     {upcomingMatches.length > 0 ? (
                                         <div className="list-group list-group-flush">
-                                            {upcomingMatches.map((match) => (
+                                            {upcomingMatches.slice(0, 3).map((match) => (
                                                 <div key={match.id} className="list-group-item border-0 px-0 py-2">
                                                     <div className="d-flex justify-content-between align-items-center">
                                                         <div className="d-flex align-items-center">
@@ -307,7 +617,7 @@ const Dashboard = () => {
                                 </Card.Body>
                                 <Card.Footer>
                                     <Link to="/matches" className="text-decoration-none">
-                                        View All Scheduled Matches <i className="bi bi-arrow-right"></i>
+                                        View All Matches <i className="bi bi-arrow-right"></i>
                                     </Link>
                                 </Card.Footer>
                             </Card>
@@ -316,11 +626,8 @@ const Dashboard = () => {
                         {/* Pending Invitations Card */}
                         <Col lg={4}>
                             <Card className="h-100">
-                                <Card.Header className="d-flex justify-content-between align-items-center">
+                                <Card.Header>
                                     <h5 className="mb-0">Pending Invitations</h5>
-                                    {pendingInvitations.length > 0 && (
-                                        <Badge bg="primary">{pendingInvitations.length}</Badge>
-                                    )}
                                 </Card.Header>
                                 <Card.Body>
                                     {pendingInvitations.length > 0 ? (
@@ -335,7 +642,7 @@ const Dashboard = () => {
                                                                 className="me-2"
                                                             />
                                                             <div>
-                                                                <h6 className="mb-0">From {invitation.from}</h6>
+                                                                <h6 className="mb-0">from {invitation.from}</h6>
                                                                 <small className="text-muted">{invitation.time}</small>
                                                             </div>
                                                         </div>
@@ -368,7 +675,7 @@ const Dashboard = () => {
                                 </Card.Body>
                                 <Card.Footer>
                                     <Link to="/matches" className="text-decoration-none">
-                                        View All Invitations <i className="bi bi-arrow-right"></i>
+                                        Manage Invitations <i className="bi bi-arrow-right"></i>
                                     </Link>
                                 </Card.Footer>
                             </Card>
@@ -381,42 +688,43 @@ const Dashboard = () => {
                                     <h5 className="mb-0">Leaderboard Preview</h5>
                                 </Card.Header>
                                 <Card.Body>
-                                    <div className="list-group list-group-flush">
-                                        {leaderboardPreview.map((player) => (
-                                            <div 
-                                                key={player.rank} 
-                                                className={`list-group-item border-0 px-0 py-2 ${player.isCurrentUser ? 'current-user-highlight' : ''}`}
-                                            >
-                                                <div className="d-flex justify-content-between align-items-center">
-                                                    <div className="d-flex align-items-center">
-                                                        <span className={`rank-number me-2 ${player.rank <= 3 ? 'top-rank' : ''}`}>
-                                                            {player.rank <= 3 && <i className="bi bi-trophy-fill me-1"></i>}
-                                                            {player.rank}.
-                                                        </span>
-                                                        <UserAvatar 
-                                                            user={{ 
-                                                                displayName: player.name,
-                                                                photoURL: player.isCurrentUser ? currentUser?.photoURL : null
-                                                            }} 
-                                                            size={32} 
-                                                            className="me-2"
-                                                        />
-                                                        <div>
-                                                            <h6 className="mb-0">
-                                                                {player.name}
-                                                                {player.isCurrentUser && (
-                                                                    <Badge bg="primary" className="ms-2">You</Badge>
-                                                                )}
-                                                            </h6>
+                                    {leaderboardPreview.length > 0 ? (
+                                        <div className="list-group list-group-flush">
+                                            {leaderboardPreview.map((player) => (
+                                                <div key={player.rank} className="list-group-item border-0 px-0 py-2">
+                                                    <div className="d-flex justify-content-between align-items-center">
+                                                        <div className="d-flex align-items-center">
+                                                            <Badge 
+                                                                bg={player.rank === 1 ? 'warning' : player.rank === 2 ? 'secondary' : 'dark'}
+                                                                className="me-2"
+                                                            >
+                                                                #{player.rank}
+                                                            </Badge>
+                                                            <UserAvatar 
+                                                                user={{ displayName: player.name }} 
+                                                                size={32} 
+                                                                className="me-2"
+                                                            />
+                                                            <div>
+                                                                <h6 className={`mb-0 ${player.isCurrentUser ? 'text-primary fw-bold' : ''}`}>
+                                                                    {player.name}
+                                                                </h6>
+                                                                <small className="text-muted">{player.wins} wins</small>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div className="text-end">
-                                                        <span className="fw-bold text-success">{player.wins} wins</span>
+                                                        {player.rank === 1 && (
+                                                            <i className="bi bi-trophy-fill text-warning"></i>
+                                                        )}
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-4">
+                                            <i className="bi bi-bar-chart fs-1 text-muted d-block mb-2"></i>
+                                            <p className="text-muted mb-0">No leaderboard data</p>
+                                        </div>
+                                    )}
                                 </Card.Body>
                                 <Card.Footer>
                                     <Link to="/leaderboard" className="text-decoration-none">
@@ -427,129 +735,135 @@ const Dashboard = () => {
                         </Col>
                     </Row>
 
-                    {/* Third Row - Recent Activity Table */}
+                    {/* Third Row - Tables and Additional Info */}
                     <Row className="mb-4">
-                        <Col lg={12}>
-                            <Card>
+                        {/* Recent Activity Table */}
+                        <Col lg={8}>
+                            <Card className="h-100">
                                 <Card.Header>
                                     <h5 className="mb-0">Recent Activity</h5>
                                 </Card.Header>
-                                <Card.Body className="p-0">
-                                    <div className="table-responsive">
-                                        <Table className="mb-0 activity-table">
+                                <Card.Body>
+                                    {recentActivity.length > 0 ? (
+                                        <Table responsive hover>
                                             <tbody>
                                                 {recentActivity.map((activity) => (
                                                     <tr key={activity.id}>
-                                                        <td className="activity-icon">
-                                                            <div className={`activity-icon-circle bg-${activity.color}`}>
-                                                                <i className={`${activity.icon} text-white`}></i>
+                                                        <td className="border-0 py-3">
+                                                            <div className="d-flex align-items-center">
+                                                                <div className={`activity-icon bg-${activity.color} text-white rounded-circle d-flex align-items-center justify-content-center me-3`} style={{width: '40px', height: '40px'}}>
+                                                                    <i className={activity.icon}></i>
+                                                                </div>
+                                                                <div>
+                                                                    <div className="fw-bold">{activity.description}</div>
+                                                                    <small className="text-muted">{activity.time}</small>
+                                                                </div>
                                                             </div>
-                                                        </td>
-                                                        <td className="activity-description">
-                                                            <span 
-                                                                className={activity.type === 'achievement' ? 'text-success fw-bold' : ''}
-                                                            >
-                                                                {activity.description}
-                                                            </span>
-                                                        </td>
-                                                        <td className="activity-time text-end">
-                                                            <small className="text-muted">{activity.time}</small>
                                                         </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </Table>
-                                    </div>
+                                    ) : (
+                                        <div className="text-center py-4">
+                                            <i className="bi bi-clock-history fs-1 text-muted d-block mb-2"></i>
+                                            <p className="text-muted mb-0">No recent activity</p>
+                                        </div>
+                                    )}
                                 </Card.Body>
-                                <Card.Footer>
-                                    <Link to="/history" className="text-decoration-none">
-                                        View Full Activity History <i className="bi bi-arrow-right"></i>
-                                    </Link>
-                                </Card.Footer>
                             </Card>
                         </Col>
-                    </Row>
 
-                    {/* Fourth Row - Additional Quick Cards */}
-                    <Row>
-                        {/* Quick Actions Card */}
+                        {/* Quick Actions and Additional Cards */}
                         <Col lg={4}>
-                            <Card className="text-center">
+                            {/* Quick Actions Card */}
+                            <Card className="mb-4">
                                 <Card.Header>
-                                    <h6 className="mb-0">
-                                        <i className="bi bi-lightning-fill me-2"></i>
-                                        Quick Actions
-                                    </h6>
+                                    <h5 className="mb-0">Quick Actions</h5>
                                 </Card.Header>
                                 <Card.Body>
                                     <div className="d-grid gap-2">
-                                        <Button variant="success" as={Link} to="/matches/create">
+                                        <Link to="/matches" className="btn btn-primary">
                                             <i className="bi bi-plus-circle me-2"></i>
-                                            Create Match
-                                        </Button>
-                                        <Button variant="outline-primary" as={Link} to="/matches">
-                                            <i className="bi bi-search me-2"></i>
-                                            Find Opponent
-                                        </Button>
+                                            Schedule New Match
+                                        </Link>
+                                        <Link to="/leaderboard" className="btn btn-outline-primary">
+                                            <i className="bi bi-bar-chart me-2"></i>
+                                            View Leaderboard
+                                        </Link>
+                                        <Link to="/profile" className="btn btn-outline-secondary">
+                                            <i className="bi bi-person me-2"></i>
+                                            Update Profile
+                                        </Link>
                                     </div>
                                 </Card.Body>
                             </Card>
-                        </Col>
 
-                        {/* Performance Trends Card */}
-                        <Col lg={4}>
-                            <Card className="text-center">
+                            {/* Performance Trends Card */}
+                            <Card className="mb-4">
                                 <Card.Header>
-                                    <h6 className="mb-0">
-                                        <i className="bi bi-graph-up me-2"></i>
-                                        Performance Trends
-                                    </h6>
+                                    <h5 className="mb-0">Performance Trends</h5>
                                 </Card.Header>
                                 <Card.Body>
-                                    <div className="mb-3">
-                                        <h4 className="text-success mb-1">↗ +12%</h4>
-                                        <small className="text-muted">Win rate this month</small>
-                                    </div>
-                                    <div className="d-flex justify-content-between">
+                                    {userStats ? (
                                         <div className="text-center">
-                                            <h6 className="text-primary mb-0">8</h6>
-                                            <small className="text-muted">This Week</small>
-                                        </div>
-                                        <div className="text-center">
-                                            <h6 className="text-warning mb-0">3</h6>
-                                            <small className="text-muted">Current Streak</small>
-                                        </div>
-                                    </div>
-                                </Card.Body>
-                            </Card>
-                        </Col>
-
-                        {/* Today's Schedule Card */}
-                        <Col lg={4}>
-                            <Card className="text-center">
-                                <Card.Header>
-                                    <h6 className="mb-0">
-                                        <i className="bi bi-calendar-day me-2"></i>
-                                        Today's Schedule
-                                    </h6>
-                                </Card.Header>
-                                <Card.Body>
-                                    {upcomingMatches.filter(match => match.time.includes('Today')).length > 0 ? (
-                                        <div>
-                                            <h4 className="text-primary mb-1">
-                                                {upcomingMatches.filter(match => match.time.includes('Today')).length}
-                                            </h4>
-                                            <small className="text-muted">Matches today</small>
-                                            <div className="mt-2">
-                                                <small className="fw-bold">
-                                                    Next: vs. {upcomingMatches.find(match => match.time.includes('Today'))?.opponent} at 5:00 PM
+                                            <div className="row g-3">
+                                                <div className="col-6">
+                                                    <div className="border rounded p-2">
+                                                        <h4 className="text-primary mb-0">{userStats.currentStreak || 0}</h4>
+                                                        <small className="text-muted">
+                                                            {userStats.streakType === 'wins' ? 'Win' : 'Loss'} Streak
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                                <div className="col-6">
+                                                    <div className="border rounded p-2">
+                                                        <h4 className="text-success mb-0">#{userStats.rank || '--'}</h4>
+                                                        <small className="text-muted">Current Rank</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="mt-3">
+                                                <small className="text-muted">
+                                                    {userStats.winRate >= 60 ? '📈 Great performance!' : 
+                                                     userStats.winRate >= 40 ? '📊 Keep improving!' : 
+                                                     '💪 Practice makes perfect!'}
                                                 </small>
                                             </div>
                                         </div>
                                     ) : (
-                                        <div>
-                                            <i className="bi bi-calendar-x fs-1 text-muted d-block mb-2"></i>
-                                            <small className="text-muted">No matches today</small>
+                                        <div className="text-center py-3">
+                                            <i className="bi bi-graph-up fs-1 text-muted d-block mb-2"></i>
+                                            <p className="text-muted mb-0">No trend data yet</p>
+                                        </div>
+                                    )}
+                                </Card.Body>
+                            </Card>
+
+                            {/* Today's Schedule Card */}
+                            <Card>
+                                <Card.Header>
+                                    <h5 className="mb-0">Today's Schedule</h5>
+                                </Card.Header>
+                                <Card.Body>
+                                    {todaySchedule.length > 0 ? (
+                                        <div className="list-group list-group-flush">
+                                            {todaySchedule.map((match) => (
+                                                <div key={match.id} className="list-group-item border-0 px-0 py-2">
+                                                    <div className="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <h6 className="mb-0">vs. {match.opponent}</h6>
+                                                            <small className="text-muted">{match.time}</small>
+                                                        </div>
+                                                        <Badge bg="primary">Today</Badge>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-3">
+                                            <i className="bi bi-calendar-check fs-1 text-muted d-block mb-2"></i>
+                                            <p className="text-muted mb-0">No matches today</p>
                                         </div>
                                     )}
                                 </Card.Body>
@@ -557,9 +871,9 @@ const Dashboard = () => {
                         </Col>
                     </Row>
 
-                    {/* Add this section to your Dashboard */}
-                    <Row className="mb-4">
-                        <Col>
+                    {/* Fourth Row - Ongoing Matches (Existing Component) */}
+                    <Row>
+                        <Col lg={12}>
                             <OngoingMatches />
                         </Col>
                     </Row>
@@ -570,3 +884,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+
