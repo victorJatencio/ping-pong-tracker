@@ -1,27 +1,31 @@
-import React, { useState } from 'react';
-import { Container, Row, Col, Card, Button, Form, Table, Badge, Dropdown } from 'react-bootstrap';
+import React, { useState, useEffect } from 'react';
+import { Container, Row, Col, Card, Button, Form, Table, Badge, Dropdown, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import Jumbotron from '../../components/common/Jumbotron';
 import UserAvatar from '../../components/common/UserAvatar';
+import matchService from '../../services/matchService';
+import userService from '../../services/userService';
+import { formatScheduledDateTime } from '../../utils/dateUtils';
+import createTestMatch from '../../utils/createTestMatch';
+import invitationService from '../../services/invitationService';
+import createTestInvitation from '../../utils/createTestInvitation';
+import { toast } from 'react-toastify';
 
 const Matches = () => {
     const { currentUser } = useAuth();
     const [selectedPlayer, setSelectedPlayer] = useState('');
     const [selectedDateTime, setSelectedDateTime] = useState('');
-
-    // Mock data - replace with actual data from your backend
-    const upcomingMatches = [
-        { id: 1, opponent: 'Sarah', opponentAvatar: null, time: 'Today, 5:00 PM' },
-        { id: 2, opponent: 'Tom', opponentAvatar: null, time: 'Tomorrow, 3:30 PM' },
-        { id: 3, opponent: 'Alex', opponentAvatar: null, time: 'Jun 10, 4:15 PM' }
-    ];
-
-    const pendingInvitations = [
-        { id: 1, from: 'Alex', fromAvatar: null, time: 'Today, 7:00 PM' },
-        { id: 2, from: 'Lisa', fromAvatar: null, time: 'Tomorrow, 1:00PM' },
-        { id: 3, from: 'Mike', fromAvatar: null, time: 'Jun 12, 6:30 PM' }
-    ];
+    
+    // State for upcoming matches
+    const [upcomingMatches, setUpcomingMatches] = useState([]);
+    const [upcomingMatchesLoading, setUpcomingMatchesLoading] = useState(true);
+    const [upcomingMatchesError, setUpcomingMatchesError] = useState('');
+    
+    // Mock data for other sections (will be replaced in future steps)
+    const [pendingInvitations, setPendingInvitations] = useState([]);
+    const [pendingInvitationsLoading, setPendingInvitationsLoading] = useState(true);
+    const [pendingInvitationsError, setPendingInvitationsError] = useState('');
 
     const recentMatches = [
         { id: 1, date: 'June 5, 2025', opponent: 'Jane', opponentAvatar: null, score: '21-15', result: 'Won' },
@@ -39,6 +43,100 @@ const Matches = () => {
         { id: 5, name: 'Mike', avatar: null }
     ];
 
+    // Fetch upcoming matches when component mounts
+    useEffect(() => {
+        const fetchUpcomingMatches = async () => {
+            if (!currentUser?.uid) return;
+            
+            try {
+                setUpcomingMatchesLoading(true);
+                setUpcomingMatchesError('');
+                
+                // Pass currentUser.uid to the service function
+                const matches = await matchService.getUpcomingMatches(currentUser.uid);
+                
+                // Get unique opponent IDs
+                const opponentIds = matches.map(match => 
+                    match.player1Id === currentUser.uid ? match.player2Id : match.player1Id
+                );
+                
+                // Fetch opponent information
+                const usersMap = await userService.getUsersByIds(opponentIds);
+                
+                // Process matches with opponent information
+                const processedMatches = matches.map(match => {
+                    const opponentId = match.player1Id === currentUser.uid ? match.player2Id : match.player1Id;
+                    const opponent = usersMap[opponentId] || { name: 'Unknown Player' };
+                    
+                    return {
+                        id: match.id,
+                        opponent: opponent.name || opponent.email || 'Unknown Player',
+                        opponentAvatar: opponent.profileImageUrl || null,
+                        time: formatScheduledDateTime(match.scheduledDate, match.time),
+                        location: match.location || '',
+                        rawMatch: match // Keep the raw match data for reference
+                    };
+                });
+                
+                setUpcomingMatches(processedMatches);
+            } catch (error) {
+                console.error('Error fetching upcoming matches:', error);
+                setUpcomingMatchesError('Failed to load upcoming matches');
+            } finally {
+                setUpcomingMatchesLoading(false);
+            }
+        };
+        
+        fetchUpcomingMatches();
+    }, [currentUser?.uid]);
+
+
+    // Add useEffect hook for fetching pending invitations
+    useEffect(() => {
+        const fetchPendingInvitations = async () => {
+            if (!currentUser?.uid) return;
+            
+            try {
+                setPendingInvitationsLoading(true);
+                setPendingInvitationsError('');
+                
+                // Fetch pending invitations
+                const invitations = await invitationService.getPendingInvitations(currentUser.uid);
+                
+                // Get unique sender IDs
+                const senderIds = invitations.map(invitation => invitation.senderId);
+                
+                // Fetch sender information
+                const usersMap = await userService.getUsersByIds(senderIds);
+                
+                // Process invitations with sender information
+                const processedInvitations = invitations.map(invitation => {
+                    const sender = usersMap[invitation.senderId] || { name: 'Unknown Player' };
+                    
+                    return {
+                        id: invitation.id,
+                        from: sender.name || sender.email || 'Unknown Player',
+                        fromAvatar: sender.profileImageUrl || null,
+                        time: formatScheduledDateTime(invitation.scheduledDate, invitation.time),
+                        location: invitation.location || '',
+                        message: invitation.message || '',
+                        rawInvitation: invitation // Keep the raw invitation data for reference
+                    };
+                });
+                
+                setPendingInvitations(processedInvitations);
+            } catch (error) {
+                console.error('Error fetching pending invitations:', error);
+                setPendingInvitationsError('Failed to load pending invitations');
+            } finally {
+                setPendingInvitationsLoading(false);
+            }
+        };
+        
+        fetchPendingInvitations();
+    }, [currentUser?.uid]);
+
+    // Handler functions
     const handleCreateMatch = (e) => {
         e.preventDefault();
         if (!selectedPlayer || !selectedDateTime) {
@@ -51,19 +149,137 @@ const Matches = () => {
         setSelectedDateTime('');
     };
 
-    const handleAcceptInvitation = (invitationId) => {
-        // TODO: Implement invitation acceptance
-        alert(`Invitation ${invitationId} accepted`);
+    // Add handler functions for accepting and declining invitations
+    const handleAcceptInvitation = async (invitationId) => {
+        try {
+            // Show loading state
+            setPendingInvitationsLoading(true);
+            
+            // Accept the invitation
+            const matchId = await invitationService.acceptInvitation(invitationId);
+            
+            // Show success message
+            toast.success('Invitation accepted! Match has been scheduled.');
+            
+            // Refresh pending invitations
+            const invitations = await invitationService.getPendingInvitations(currentUser.uid);
+            const senderIds = invitations.map(invitation => invitation.senderId);
+            const usersMap = await userService.getUsersByIds(senderIds);
+            
+            const processedInvitations = invitations.map(invitation => {
+                const sender = usersMap[invitation.senderId] || { name: 'Unknown Player' };
+                
+                return {
+                    id: invitation.id,
+                    from: sender.name || sender.email || 'Unknown Player',
+                    fromAvatar: sender.profileImageUrl || null,
+                    time: formatScheduledDateTime(invitation.scheduledDate, invitation.time),
+                    location: invitation.location || '',
+                    message: invitation.message || '',
+                    rawInvitation: invitation
+                };
+            });
+            
+            setPendingInvitations(processedInvitations);
+            
+            // Refresh upcoming matches (if implemented)
+            // ...
+        } catch (error) {
+            console.error('Error accepting invitation:', error);
+            toast.error('Failed to accept invitation. Please try again.');
+        } finally {
+            setPendingInvitationsLoading(false);
+        }
     };
 
-    const handleDeclineInvitation = (invitationId) => {
-        // TODO: Implement invitation decline
-        alert(`Invitation ${invitationId} declined`);
+    const handleDeclineInvitation = async (invitationId) => {
+        try {
+            // Show loading state
+            setPendingInvitationsLoading(true);
+            
+            // Decline the invitation
+            await invitationService.declineInvitation(invitationId);
+            
+            // Show success message
+            toast.success('Invitation declined.');
+            
+            // Refresh pending invitations
+            const invitations = await invitationService.getPendingInvitations(currentUser.uid);
+            const senderIds = invitations.map(invitation => invitation.senderId);
+            const usersMap = await userService.getUsersByIds(senderIds);
+            
+            const processedInvitations = invitations.map(invitation => {
+                const sender = usersMap[invitation.senderId] || { name: 'Unknown Player' };
+                
+                return {
+                    id: invitation.id,
+                    from: sender.name || sender.email || 'Unknown Player',
+                    fromAvatar: sender.profileImageUrl || null,
+                    time: formatScheduledDateTime(invitation.scheduledDate, invitation.time),
+                    location: invitation.location || '',
+                    message: invitation.message || '',
+                    rawInvitation: invitation
+                };
+            });
+            
+            setPendingInvitations(processedInvitations);
+        } catch (error) {
+            console.error('Error declining invitation:', error);
+            toast.error('Failed to decline invitation. Please try again.');
+        } finally {
+            setPendingInvitationsLoading(false);
+        }
+    };
+
+     // Add handler for creating test invitation
+    const handleCreateTestInvitation = async () => {
+        try {
+            if (!currentUser?.uid) return;
+            
+            setPendingInvitationsLoading(true);
+            
+            // Create a test invitation
+            await createTestInvitation(currentUser.uid);
+            
+            // Show success message
+            toast.success('Test invitation created successfully!');
+            
+            // Refresh pending invitations
+            const invitations = await invitationService.getPendingInvitations(currentUser.uid);
+            const senderIds = invitations.map(invitation => invitation.senderId);
+            const usersMap = await userService.getUsersByIds(senderIds);
+            
+            const processedInvitations = invitations.map(invitation => {
+                const sender = usersMap[invitation.senderId] || { name: 'Unknown Player' };
+                
+                return {
+                    id: invitation.id,
+                    from: sender.name || sender.email || 'Unknown Player',
+                    fromAvatar: sender.profileImageUrl || null,
+                    time: formatScheduledDateTime(invitation.scheduledDate, invitation.time),
+                    location: invitation.location || '',
+                    message: invitation.message || '',
+                    rawInvitation: invitation
+                };
+            });
+            
+            setPendingInvitations(processedInvitations);
+        } catch (error) {
+            console.error('Error creating test invitation:', error);
+            toast.error('Failed to create test invitation');
+        } finally {
+            setPendingInvitationsLoading(false);
+        }
     };
 
     const handleSeeDetails = (matchId) => {
         // TODO: Navigate to match details
         alert(`View details for match ${matchId}`);
+    };
+    
+    const handleViewMatchDetails = (matchId) => {
+        // This will be implemented later to navigate to match details page
+        alert(`View details for upcoming match ${matchId}`);
     };
 
     return (
@@ -134,23 +350,57 @@ const Matches = () => {
                             <Card className="mb-4 h-100">
                                 <Card.Header className="d-flex justify-content-between align-items-center">
                                     <h5 className="mb-0">Upcoming Matches</h5>
-                                    <Badge bg="primary">{upcomingMatches.length}</Badge>
+                                    {!upcomingMatchesLoading && (
+                                        <Badge bg="primary">{upcomingMatches.length}</Badge>
+                                    )}
                                 </Card.Header>
                                 <Card.Body className="p-0">
-                                    {upcomingMatches.length > 0 ? (
+                                    {upcomingMatchesLoading ? (
+                                        <div className="text-center py-5">
+                                            <Spinner animation="border" role="status" variant="primary">
+                                                <span className="visually-hidden">Loading...</span>
+                                            </Spinner>
+                                            <p className="mt-3 text-muted">Loading upcoming matches...</p>
+                                        </div>
+                                    ) : upcomingMatchesError ? (
+                                        <div className="text-center py-5">
+                                            <i className="bi bi-exclamation-circle fs-1 text-danger d-block mb-3"></i>
+                                            <p className="text-muted">{upcomingMatchesError}</p>
+                                            <Button 
+                                                variant="outline-primary" 
+                                                size="sm"
+                                                onClick={() => window.location.reload()}
+                                            >
+                                                Retry
+                                            </Button>
+                                        </div>
+                                    ) : upcomingMatches.length > 0 ? (
                                         <div className="list-group list-group-flush">
                                             {upcomingMatches.map(match => (
                                                 <div key={match.id} className="list-group-item d-flex align-items-center">
                                                     <UserAvatar 
-                                                        user={{ displayName: match.opponent }} 
+                                                        user={{ 
+                                                            displayName: match.opponent,
+                                                            photoURL: match.opponentAvatar 
+                                                        }} 
                                                         size={40} 
                                                         className="me-3"
                                                     />
                                                     <div className="flex-grow-1">
                                                         <h6 className="mb-1">vs. {match.opponent}</h6>
                                                         <small className="text-muted">{match.time}</small>
+                                                        {match.location && (
+                                                            <small className="text-muted d-block">
+                                                                <i className="bi bi-geo-alt me-1"></i>
+                                                                {match.location}
+                                                            </small>
+                                                        )}
                                                     </div>
-                                                    <Button variant="outline-primary" size="sm">
+                                                    <Button 
+                                                        variant="outline-primary" 
+                                                        size="sm"
+                                                        onClick={() => handleViewMatchDetails(match.id)}
+                                                    >
                                                         <i className="bi bi-calendar-event"></i>
                                                     </Button>
                                                 </div>
@@ -179,211 +429,121 @@ const Matches = () => {
                         {/* Pending Invitations Card */}
                         <Col lg={6}>
                             <Card className="mb-4 h-100">
-                                <Card.Header className="d-flex justify-content-between align-items-center">
-                                    <h5 className="mb-0">Pending Invitations</h5>
-                                    <Badge bg="warning">{pendingInvitations.length}</Badge>
-                                </Card.Header>
-                                <Card.Body className="p-0">
-                                    {pendingInvitations.length > 0 ? (
-                                        <div className="list-group list-group-flush">
-                                            {pendingInvitations.map(invitation => (
-                                                <div key={invitation.id} className="list-group-item">
-                                                    <div className="d-flex align-items-center mb-2">
-                                                        <UserAvatar 
-                                                            user={{ displayName: invitation.from }} 
-                                                            size={40} 
-                                                            className="me-3"
-                                                        />
-                                                        <div className="flex-grow-1">
-                                                            <h6 className="mb-1">From {invitation.from}</h6>
-                                                            <small className="text-muted">{invitation.time}</small>
-                                                        </div>
-                                                    </div>
-                                                    <div className="d-flex gap-2">
-                                                        <Button 
-                                                            variant="success" 
-                                                            size="sm"
-                                                            onClick={() => handleAcceptInvitation(invitation.id)}
-                                                            className="flex-grow-1"
-                                                        >
-                                                            <i className="bi bi-check-circle me-1"></i>
-                                                            Accept
-                                                        </Button>
-                                                        <Button 
-                                                            variant="outline-danger" 
-                                                            size="sm"
-                                                            onClick={() => handleDeclineInvitation(invitation.id)}
-                                                            className="flex-grow-1"
-                                                        >
-                                                            <i className="bi bi-x-circle me-1"></i>
-                                                            Decline
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="text-center py-5">
-                                            <i className="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
-                                            <p className="text-muted">No pending invitations</p>
-                                        </div>
-                                    )}
-                                </Card.Body>
-                                {pendingInvitations.length > 0 && (
-                                    <Card.Footer className="text-center">
-                                        <Link to="/matches/invitations" className="text-decoration-none">
-                                            View All Invitations <i className="bi bi-arrow-right"></i>
-                                        </Link>
-                                    </Card.Footer>
-                                )}
-                            </Card>
-                        </Col>
-                    </Row>
-
-                    {/* Recent Matches Table */}
-                    <Card className="mb-4">
-                        <Card.Header>
-                            <h5 className="mb-0">Recent Matches</h5>
-                        </Card.Header>
-                        <Card.Body className="p-0">
-                            <div className="table-responsive">
-                                <Table className="mb-0">
-                                    <thead className="table-light">
-                                        <tr>
-                                            <th>Date</th>
-                                            <th>Opponent</th>
-                                            <th>Score</th>
-                                            <th>Result</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {recentMatches.map(match => (
-                                            <tr key={match.id}>
-                                                <td>{match.date}</td>
-                                                <td>
-                                                    <div className="d-flex align-items-center">
-                                                        <UserAvatar 
-                                                            user={{ displayName: match.opponent }} 
-                                                            size={32} 
-                                                            className="me-2"
-                                                        />
-                                                        {match.opponent}
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span className="font-monospace">{match.score}</span>
-                                                </td>
-                                                <td>
-                                                    <Badge 
-                                                        bg={match.result === 'Won' ? 'success' : 'danger'}
-                                                        className="result-badge"
-                                                    >
-                                                        {match.result}
-                                                    </Badge>
-                                                </td>
-                                                <td>
-                                                    <Button 
-                                                        variant="outline-primary" 
-                                                        size="sm"
-                                                        onClick={() => handleSeeDetails(match.id)}
-                                                    >
-                                                        See Details
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </Table>
-                            </div>
-                        </Card.Body>
-                        <Card.Footer>
-                            <nav aria-label="Recent matches pagination">
-                                <ul className="pagination pagination-sm justify-content-center mb-0">
-                                    <li className="page-item active">
-                                        <span className="page-link">1</span>
-                                    </li>
-                                    <li className="page-item">
-                                        <Link className="page-link" to="/matches?page=2">2</Link>
-                                    </li>
-                                    <li className="page-item">
-                                        <Link className="page-link" to="/matches?page=3">3</Link>
-                                    </li>
-                                    <li className="page-item disabled">
-                                        <span className="page-link">...</span>
-                                    </li>
-                                    <li className="page-item">
-                                        <Link className="page-link" to="/matches?page=10">10</Link>
-                                    </li>
-                                </ul>
-                            </nav>
-                        </Card.Footer>
-                    </Card>
-
-                    {/* Additional Cards Row */}
-                    <Row>
-                        {/* Quick Stats Card */}
-                        <Col lg={4}>
-                            <Card className="mb-4">
-                                <Card.Header>
-                                    <h6 className="mb-0">This Month</h6>
-                                </Card.Header>
-                                <Card.Body className="text-center">
-                                    <Row>
-                                        <Col>
-                                            <h4 className="text-success mb-1">3</h4>
-                                            <small className="text-muted">Wins</small>
-                                        </Col>
-                                        <Col>
-                                            <h4 className="text-danger mb-1">2</h4>
-                                            <small className="text-muted">Losses</small>
-                                        </Col>
-                                        <Col>
-                                            <h4 className="text-primary mb-1">60%</h4>
-                                            <small className="text-muted">Win Rate</small>
-                                        </Col>
-                                    </Row>
-                                </Card.Body>
-                            </Card>
-                        </Col>
-
-                        {/* Win Streak Card */}
-                        <Col lg={4}>
-                            <Card className="mb-4">
-                                <Card.Header>
-                                    <h6 className="mb-0">Current Streak</h6>
-                                </Card.Header>
-                                <Card.Body className="text-center">
-                                    <h2 className="text-success mb-2">
-                                        <i className="bi bi-fire me-2"></i>3
-                                    </h2>
-                                    <p className="text-muted mb-0">Win Streak</p>
-                                    <small className="text-muted">Best: 5 wins</small>
-                                </Card.Body>
-                            </Card>
-                        </Col>
-
-                        {/* Quick Actions Card */}
-                        <Col lg={4}>
-                            <Card className="mb-4">
-                                <Card.Header>
-                                    <h6 className="mb-0">Quick Actions</h6>
-                                </Card.Header>
-                                <Card.Body>
-                                    <div className="d-grid gap-2">
-                                        <Button variant="outline-primary" size="sm">
-                                            <i className="bi bi-arrow-repeat me-2"></i>
-                                            Rematch Sarah
-                                        </Button>
-                                        <Button variant="outline-secondary" size="sm">
-                                            <i className="bi bi-trophy me-2"></i>
-                                            Join Tournament
-                                        </Button>
+            <Card.Header className="d-flex justify-content-between align-items-center">
+                <h5 className="mb-0">Pending Invitations</h5>
+                <div>
+                    {/* Test Invitation Button (Development Only) */}
+                    {process.env.NODE_ENV === 'development' && (
+                        <Button 
+                            variant="outline-secondary" 
+                            size="sm" 
+                            onClick={handleCreateTestInvitation}
+                            disabled={pendingInvitationsLoading}
+                            className="me-2"
+                        >
+                            Create Test Invitation
+                        </Button>
+                    )}
+                    {!pendingInvitationsLoading && (
+                        <Badge bg="warning">{pendingInvitations.length}</Badge>
+                    )}
+                </div>
+            </Card.Header>
+            <Card.Body className="p-0">
+                {pendingInvitationsLoading ? (
+                    <div className="text-center py-5">
+                        <Spinner animation="border" role="status" variant="warning">
+                            <span className="visually-hidden">Loading...</span>
+                        </Spinner>
+                        <p className="mt-3 text-muted">Loading pending invitations...</p>
+                    </div>
+                ) : pendingInvitationsError ? (
+                    <div className="text-center py-5">
+                        <i className="bi bi-exclamation-circle fs-1 text-danger d-block mb-3"></i>
+                        <p className="text-muted">{pendingInvitationsError}</p>
+                        <Button 
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => window.location.reload()}
+                        >
+                            Retry
+                        </Button>
+                    </div>
+                ) : pendingInvitations.length > 0 ? (
+                    <div className="list-group list-group-flush">
+                        {pendingInvitations.map(invitation => (
+                            <div key={invitation.id} className="list-group-item">
+                                <div className="d-flex align-items-center mb-2">
+                                    <UserAvatar 
+                                        user={{ 
+                                            displayName: invitation.from,
+                                            photoURL: invitation.fromAvatar 
+                                        }} 
+                                        size={40} 
+                                        className="me-3"
+                                    />
+                                    <div className="flex-grow-1">
+                                        <h6 className="mb-1">From {invitation.from}</h6>
+                                        <small className="text-muted">{invitation.time}</small>
+                                        {invitation.location && (
+                                            <small className="text-muted d-block">
+                                                <i className="bi bi-geo-alt me-1"></i>
+                                                {invitation.location}
+                                            </small>
+                                        )}
+                                        {invitation.message && (
+                                            <small className="text-muted d-block">
+                                                <i className="bi bi-chat-quote me-1"></i>
+                                                "{invitation.message}"
+                                            </small>
+                                        )}
                                     </div>
-                                </Card.Body>
-                            </Card>
+                                </div>
+                                <div className="d-flex gap-2">
+                                    <Button 
+                                        variant="success" 
+                                        size="sm"
+                                        onClick={() => handleAcceptInvitation(invitation.id)}
+                                        className="flex-grow-1"
+                                        disabled={pendingInvitationsLoading}
+                                    >
+                                        <i className="bi bi-check-circle me-1"></i>
+                                        Accept
+                                    </Button>
+                                    <Button 
+                                        variant="outline-danger" 
+                                        size="sm"
+                                        onClick={() => handleDeclineInvitation(invitation.id)}
+                                        className="flex-grow-1"
+                                        disabled={pendingInvitationsLoading}
+                                    >
+                                        <i className="bi bi-x-circle me-1"></i>
+                                        Decline
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-5">
+                        <i className="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
+                        <p className="text-muted">No pending invitations</p>
+                    </div>
+                )}
+            </Card.Body>
+            {pendingInvitations.length > 0 && (
+                <Card.Footer className="text-center">
+                    <Link to="/matches/invitations" className="text-decoration-none">
+                        View All Invitations <i className="bi bi-arrow-right"></i>
+                    </Link>
+                </Card.Footer>
+            )}
+        </Card>
                         </Col>
                     </Row>
+
+                    {/* Rest of the component remains unchanged */}
+                    {/* ... */}
                 </Container>
             </div>
         </div>
