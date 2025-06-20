@@ -1,0 +1,34 @@
+# Environment variables for both frontend and backend
+**/.env
+**/.env.local
+**/.env.development
+**/.env.production
+**/.env.test
+
+# Dependencies
+**/node_modules/
+
+# Firebase service account keys
+**/*-firebase-adminsdk-*.json
+**/serviceAccountKey.json
+**/firebase-service-account.json
+
+# Logs
+**/*.log
+**/logs/
+
+# IDE and OS files
+.vscode/
+.idea/
+**/.DS_Store
+**/Thumbs.db
+
+# Build outputs
+**/dist/
+**/build/
+**/coverage/
+
+# Runtime data
+**/*.pid
+**/*.seed
+**/*.pid.lock
