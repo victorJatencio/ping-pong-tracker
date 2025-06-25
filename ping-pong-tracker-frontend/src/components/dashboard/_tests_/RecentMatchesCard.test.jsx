@@ -4,12 +4,16 @@ import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
-import { store } from "../../../store"; // Corrected path
+import { store } from "../../../store";
 import RecentMatchesCard from "../RecentMatchesCard";
-import { useAuth } from '../../../hooks/useAuth'; // Import useAuth for mocking
 
-// Mock the useAuth hook
-jest.mock('../../../hooks/useAuth');
+// Mock the useAuth hook module
+jest.mock('../../../hooks/useAuth', () => ({
+  useAuth: jest.fn(),
+}));
+
+// Import the mocked useAuth
+import { useAuth } from '../../../hooks/useAuth';
 
 // A simple wrapper for tests that need Redux and Router
 const TestWrapper = ({ children }) => (
@@ -22,7 +26,7 @@ describe("RecentMatchesCard", () => {
   beforeEach(() => {
     // Set up a mock current user for each test
     useAuth.mockReturnValue({
-      currentUser: { uid: 'user1', email: 'test@example.com' }, // Ensure this UID exists in your mock users
+      currentUser: { uid: 'user1', email: 'test@example.com' },
       loading: false,
       error: null,
       login: jest.fn(),
@@ -39,57 +43,59 @@ describe("RecentMatchesCard", () => {
       </TestWrapper>
     );
 
+    // Check for the card title first
+    expect(screen.getByText("Recent Matches")).toBeInTheDocument();
+    
     // Wait for the data to load and check match display
     await waitFor(() => {
-      // Check for specific text from your mock data
-      expect(screen.getByText("vs. John Doe")).toBeInTheDocument();
-      expect(screen.getByText("vs. Bob Johnson")).toBeInTheDocument(); // Ensure this name is in your mock users
-      expect(screen.getByText("21-15")).toBeInTheDocument();
-      expect(screen.getByText("Won")).toBeInTheDocument(); // Assuming 'user1' won against John Doe in mock data
-    }, { timeout: 5000 }); // Increase timeout if needed
+      // Check for opponent names (based on our mock data)
+      expect(screen.getByText("vs. Charlie")).toBeInTheDocument();
+    }, { timeout: 5000 });
+    
+    // Check for other elements that should be present
+    expect(screen.getByText("vs. John Doe")).toBeInTheDocument();
+    expect(screen.getByText("21-19")).toBeInTheDocument();
+    expect(screen.getByText("21-18")).toBeInTheDocument();
+    
+    // Check for win/loss badges
+    const wonBadges = screen.getAllByText("Won");
+    const lostBadges = screen.getAllByText("Lost");
+    expect(wonBadges.length).toBeGreaterThan(0);
+    expect(lostBadges.length).toBeGreaterThan(0);
   });
 
-  // Test for loading state (this might be too fast to catch with MSW)
-  // You might need to add a delay to your MSW handler to properly test loading states.
-  // For now, let's adjust the expectation.
-  test("displays loading state (if visible) or directly renders data", async () => {
+  // Test for component structure
+  test("displays component structure correctly", async () => {
     render(
       <TestWrapper>
         <RecentMatchesCard />
       </TestWrapper>
     );
 
-    // Instead of expecting "Loading...", we expect the data to eventually appear.
-    // If you want to test the loading state explicitly, you'd need to delay MSW's response.
-    await waitFor(() => {
-      expect(screen.getByText("Recent Matches")).toBeInTheDocument();
-      // Expect either loading or actual data
-      const loadingText = screen.queryByText("Loading...");
-      const noMatchesText = screen.queryByText("No recent matches");
-      const matchText = screen.queryByText(/vs\./);
-
-      // Assert that we are not stuck in "No recent matches" if data is expected
-      expect(noMatchesText).not.toBeInTheDocument();
-      expect(matchText).toBeInTheDocument(); // Expect some match to be rendered
-    }, { timeout: 5000 });
+    // Check for the main title
+    expect(screen.getByText("Recent Matches")).toBeInTheDocument();
+    
+    // Check for the footer link
+    expect(screen.getByText("View All Matches")).toBeInTheDocument();
+    
+    // Verify the component renders without crashing
+    const cardElement = screen.getByText("Recent Matches").closest('.dashboard-card');
+    expect(cardElement).toBeInTheDocument();
   });
 
-  // Test for handling missing user data gracefully (if applicable)
-  test("handles missing user data gracefully", async () => {
-    // You might need a specific MSW handler for this test case
-    // that returns matches with user IDs not present in mockUserDocs.
-    // For now, let's just ensure the component doesn't crash.
+  // Test for handling data gracefully
+  test("handles component rendering gracefully", async () => {
     render(
       <TestWrapper>
         <RecentMatchesCard />
       </TestWrapper>
     );
 
-    await waitFor(() => {
-      // If a user is missing, it might show "Unknown Player"
-      // This test would require a specific mock scenario where a match has an unknown player.
-      // For now, let's ensure the component renders without crashing.
-      expect(screen.getByText("Recent Matches")).toBeInTheDocument();
-    }, { timeout: 5000 });
+    // Ensure the component renders without crashing
+    expect(screen.getByText("Recent Matches")).toBeInTheDocument();
+    
+    // Check that we have some match content (at least one "vs." text)
+    const vsElements = screen.getAllByText(/vs\./);
+    expect(vsElements.length).toBeGreaterThan(0);
   });
 });

@@ -49,8 +49,6 @@
     "jest": "^30.0.2",
     "jest-environment-jsdom": "^30.0.2",
     "jest-transform-stub": "^2.0.0",
-    "msw": "^2.10.2",
-    "node-fetch": "^3.3.2",
     "sass": "^1.89.2",
     "vite": "^6.3.5"
   }

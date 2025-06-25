@@ -2,7 +2,8 @@ export default {
   // Test environment
   testEnvironment: 'jsdom',
   
-  // Setup files
+  // Setup files - polyfills MUST come before setupTests
+  setupFiles: ['<rootDir>/src/polyfills.js'],
   setupFilesAfterEnv: ['<rootDir>/src/setupTests.js'],
   
   // Module file extensions
@@ -17,10 +18,6 @@ export default {
       ]
     }]
   },
-
-  transformIgnorePatterns: [
-    '/node_modules/(?!node-fetch|msw)/', // Do NOT ignore node-fetch and msw
-  ],
   
   // Module name mapping for CSS and assets
   moduleNameMapper: {
