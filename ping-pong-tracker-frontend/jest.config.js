@@ -17,6 +17,10 @@ export default {
       ]
     }]
   },
+
+  transformIgnorePatterns: [
+    '/node_modules/(?!node-fetch|msw)/', // Do NOT ignore node-fetch and msw
+  ],
   
   // Module name mapping for CSS and assets
   moduleNameMapper: {

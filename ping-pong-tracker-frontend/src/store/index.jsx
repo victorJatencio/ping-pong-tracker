@@ -21,23 +21,22 @@ export const store = configureStore({
       serializableCheck: {
         // Ignore these action types from serializability checks
         ignoredActions: [
-          'persist/PERSIST', 
-          'persist/REHYDRATE',
-          // Ignore all RTK Query actions
           'api/executeQuery/pending',
           'api/executeQuery/fulfilled',
           'api/executeQuery/rejected',
-          'api/executeMutation/pending',
-          'api/executeMutation/fulfilled',
-          'api/executeMutation/rejected'
+          'api/subscriptions/unsubscribeQueryResult',
+          'api/config/middlewareRegistered',
         ],
         // Ignore Firebase Timestamp objects in state paths
         ignoredPaths: [
           'api.queries',
           'api.mutations',
-          'api.provided',
-          'api.subscriptions',
-          'api.config'
+          // Specific paths for date fields that RTK Query might put in the cache
+          // These regex patterns will match 'completedDate', 'createdAt', 'updatedAt'
+          // within any query result data array.
+          /^api\.queries\..*\.data\.\d+\.completedDate$/,
+          /^api\.queries\..*\.data\.\d+\.createdAt$/,
+          /^api\.queries\..*\.data\.\d+\.updatedAt$/,
         ],
         // Ignore non-serializable values in actions
         ignoredActionPaths: [
@@ -46,8 +45,9 @@ export const store = configureStore({
           'payload.completedDate',
           'payload.scheduledDate',
           'meta.arg.originalArgs'
-        ]
+        ],
       },
+      
     }).concat(apiSlice.middleware),
     
   devTools: process.env.NODE_ENV !== 'production',
