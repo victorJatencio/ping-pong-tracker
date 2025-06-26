@@ -86,10 +86,9 @@ const OngoingMatchesCard = React.memo(() => {
       <DashboardCard
         title="Ongoing Matches"
         icon="🏓"
-        loading={isLoading}
+        isLoading={isLoading}
         error={error}
-        onRetry={refetchMatches}
-        footerText={processedMatches.length > 0 ? `${processedMatches.length} active match${processedMatches.length !== 1 ? 'es' : ''}` : null}
+        footerAction={processedMatches.length > 0 ? `${processedMatches.length} active match${processedMatches.length !== 1 ? 'es' : ''}` : null}
       >
         <OngoingMatchesList
           matches={processedMatches}

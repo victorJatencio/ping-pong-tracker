@@ -18,7 +18,10 @@ import {
 // import { generateNotificationId } from "../../utils/notifications";
 
 // Temporary placeholder functions (remove these when you create the actual utility files)
-const validatePingPongScore = (score1, score2) => ({ isValid: true, errors: [] });
+const validatePingPongScore = (score1, score2) => ({
+  isValid: true,
+  errors: [],
+});
 const createScoreUpdateNotification = (user, match, score) => ({});
 const createScoreAuditEntry = (...args) => ({});
 const storeAuditEntry = (entry) => Promise.resolve();
@@ -66,7 +69,15 @@ const firebaseBaseQuery = () => async (args) => {
 export const apiSlice = createApi({
   reducerPath: "api",
   baseQuery: firebaseBaseQuery(),
-  tagTypes: ["Match", "User", "Invitation", "Stats", "Notifications", "OngoingMatches", "RecentMatches"],
+  tagTypes: [
+    "Match",
+    "User",
+    "Invitation",
+    "Stats",
+    "Notifications",
+    "OngoingMatches",
+    "RecentMatches",
+  ],
   endpoints: (builder) => ({
     // Get all recent matches (for Recent Matches card - shows matches from ALL users)
     getAllRecentMatches: builder.query({
@@ -140,46 +151,47 @@ export const apiSlice = createApi({
     // Get ongoing matches (matches that need score updates)
     getOngoingMatches: builder.query({
       query: (userId) => {
-        const baseQuery = {
+        if (!userId) {
+          throw new Error("User ID is required for getOngoingMatches query");
+        }
+
+        return {
           collection: "matches",
-          where: [
-            ["participants", "array-contains", userId],
-            ["status", "in", ["scheduled", "in-progress"]],
+          queryConstraints: [
+            // Query for matches where user is either player1 or player2
+            // Note: Firebase doesn't support OR queries directly, so we'll filter in transformResponse
+            where("status", "in", ["scheduled", "in-progress"]),
+            orderBy("scheduledDate", "asc"),
           ],
-          orderBy: [["scheduledDate", "asc"]],
-        };
-
-        return {
-          url: "/firebase/query",
-          method: "POST",
-          body: baseQuery,
         };
       },
-      transformResponse: (response) => {
-        if (!response?.documents) return { matches: [], total: 0 };
-        const matches = response.documents.map((doc) => ({
-          id: doc.id,
-          ...doc.data,
-          scheduledDate:
-            doc.data.scheduledDate?.toDate?.() ||
-            new Date(doc.data.scheduledDate),
-          createdAt:
-            doc.data.createdAt?.toDate?.() || new Date(doc.data.createdAt),
-          updatedAt:
-            doc.data.updatedAt?.toDate?.() || new Date(doc.data.updatedAt),
-        }));
-
-        return {
-          matches,
-          total: matches.length,
-        };
-      },
-      providesTags: (result) => [
+      providesTags: (result, error, userId) => [
+        { type: "OngoingMatches", id: userId },
         "OngoingMatches",
-        ...(result?.matches || []).map(({ id }) => ({ type: "Match", id })),
       ],
-      keepUnusedDataFor: 300, // 5 minutes cache
-      refetchOnMountOrArgChange: 30, // Refetch if data is older than 30 seconds
+      transformResponse: (response, meta, userId) => {
+        if (!response || !Array.isArray(response)) {
+          return [];
+        }
+
+        // Filter matches where the user is a participant
+        const userMatches = response.filter(
+          (match) => match.player1Id === userId || match.player2Id === userId
+        );
+
+        // Transform Firebase timestamps to readable dates
+        return userMatches.map((match) => ({
+          ...match,
+          scheduledDate:
+            match.scheduledDate?.toDate?.() || new Date(match.scheduledDate),
+          createdAt: match.createdAt?.toDate?.() || new Date(match.createdAt),
+          updatedAt: match.updatedAt?.toDate?.() || new Date(match.updatedAt),
+        }));
+      },
+      // Invalidate cache when matches are updated
+      invalidatesTags: (result, error, userId) => [
+        { type: "OngoingMatches", id: userId },
+      ],
     }),
 
     // Update match score with anti-cheating validation
@@ -519,16 +531,20 @@ export const apiSlice = createApi({
       onQueryStarted: async (arg, { dispatch, queryFulfilled }) => {
         // Optimistic update
         const patchResult = dispatch(
-          apiSlice.util.updateQueryData("getNotifications", arg.userId, (draft) => {
-            const notification = draft.notifications.find(
-              (n) => n.id === arg.notificationId
-            );
-            if (notification && !notification.read) {
-              notification.read = true;
-              notification.readAt = new Date();
-              draft.unreadCount = Math.max(0, draft.unreadCount - 1);
+          apiSlice.util.updateQueryData(
+            "getNotifications",
+            arg.userId,
+            (draft) => {
+              const notification = draft.notifications.find(
+                (n) => n.id === arg.notificationId
+              );
+              if (notification && !notification.read) {
+                notification.read = true;
+                notification.readAt = new Date();
+                draft.unreadCount = Math.max(0, draft.unreadCount - 1);
+              }
             }
-          })
+          )
         );
         try {
           await queryFulfilled;
@@ -596,4 +612,3 @@ export const {
   useUpdateMatchScoreMutation,
   useUpdateMatchStatusMutation,
 } = apiSlice;
-

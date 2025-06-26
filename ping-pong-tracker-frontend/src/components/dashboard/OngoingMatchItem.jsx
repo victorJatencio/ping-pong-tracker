@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Badge, Button, Row, Col } from 'react-bootstrap';
-import UserAvatar from '../../common/UserAvatar';
+import UserAvatar from '../../components/common/UserAvatar';
 import MatchHeader from './MatchHeader';
 import MatchDetails from './MatchDetails';
 import MatchScore from './MatchScore';

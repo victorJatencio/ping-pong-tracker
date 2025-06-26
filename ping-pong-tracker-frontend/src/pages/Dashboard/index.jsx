@@ -15,7 +15,7 @@ import Jumbotron from "../../components/common/Jumbotron";
 import UserAvatar from "../../components/common/UserAvatar";
 import { Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
-import OngoingMatches from "../../components/match/OngoingMatches";
+import OngoingMatches from "../../components/dashboard/OngoingMatchesCard";
 import statsService from "../../services/statsService";
 import { db } from "../../config/firebase";
 import { collection, getDocs } from "firebase/firestore";

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Row, Col } from 'react-bootstrap';
-import UserAvatar from '../../common/UserAvatar';
+import UserAvatar from '../../components/common/UserAvatar';
 
 /**
  * Match details component for displaying opponent and match information
