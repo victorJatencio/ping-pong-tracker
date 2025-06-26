@@ -1,117 +1,297 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { useSelector } from 'react-redux';
-import DashboardCard from '../common/Card';
-import OngoingMatchesList from './OngoingMatchesList';
-import UpdateScoreModal from './UpdateScoreModal';
-import { useGetOngoingMatchesQuery, useGetAllUsersQuery } from '../../store/slices/apiSlice';
+import React, { useState, useEffect } from 'react';
+import { Card, Button, Badge, Row, Col, Spinner, Alert } from 'react-bootstrap';
+import { useDispatch } from 'react-redux';
 import { useAuth } from '../../hooks/useAuth';
+import { db } from '../../config/firebase';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { openMatchCreationModal } from '../../store/slices/uiSlice';
+import UpdateScoreModal from './UpdateScoreModal';
 
 /**
- * Main container component for the Ongoing Matches card
- * Manages data fetching, state coordination, and modal interactions
+ * Updated OngoingMatches component that properly passes data to the modal
  */
-const OngoingMatchesCard = React.memo(() => {
-  const { currentUser } = useAuth();
-  const [selectedMatch, setSelectedMatch] = useState(null);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
+const OngoingMatchesCard = () => {
+    const { currentUser } = useAuth();
+    const dispatch = useDispatch();
+    const [matches, setMatches] = useState([]);
+    const [users, setUsers] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [selectedMatch, setSelectedMatch] = useState(null);
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
 
-  // Fetch ongoing matches for current user
-  const {
-    data: matchesData,
-    isLoading: matchesLoading,
-    error: matchesError,
-    refetch: refetchMatches
-  } = useGetOngoingMatchesQuery(currentUser?.uid, {
-    skip: !currentUser?.uid,
-    pollingInterval: 30000, // Poll every 30 seconds for real-time updates
-    refetchOnFocus: true,
-    refetchOnReconnect: true
-  });
+    // Fetch ongoing matches for current user (using working Firebase queries)
+    useEffect(() => {
+        if (!currentUser) {
+            setLoading(false);
+            return;
+        }
 
-  // Fetch all users for opponent information
-  const {
-    data: usersData,
-    isLoading: usersLoading
-  } = useGetAllUsersQuery(undefined, {
-    skip: !currentUser?.uid
-  });
+        const matchesRef = collection(db, 'matches');
+        
+        // Query for matches where current user is a participant and status is not completed
+        const q = query(
+            matchesRef,
+            where('status', 'in', ['scheduled', 'in-progress']),
+            orderBy('scheduledDate', 'desc')
+        );
 
-  // Memoized data processing for performance
-  const processedMatches = useMemo(() => {
-    if (!matchesData?.matches || !usersData?.users) {
-      return [];
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const fetchedMatches = querySnapshot.docs
+                .map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }))
+                .filter(match => 
+                    match.player1Id === currentUser.uid || 
+                    match.player2Id === currentUser.uid
+                );
+
+            setMatches(fetchedMatches);
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching ongoing matches:", error);
+            setError("Failed to load ongoing matches.");
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [currentUser]);
+
+    // Fetch user data for display names (using working Firebase queries)
+    useEffect(() => {
+        const fetchUsers = async () => {
+            if (matches.length === 0) return;
+
+            try {
+                const usersRef = collection(db, 'users');
+                const unsubscribe = onSnapshot(usersRef, (querySnapshot) => {
+                    const usersData = {};
+                    querySnapshot.docs.forEach(doc => {
+                        usersData[doc.id] = {
+                            id: doc.id,
+                            ...doc.data()
+                        };
+                    });
+                    setUsers(usersData);
+                });
+
+                return () => unsubscribe();
+            } catch (error) {
+                console.error("Error fetching users:", error);
+            }
+        };
+
+        fetchUsers();
+    }, [matches]);
+
+    // Redux modal integration (from new component)
+    const handleScheduleNewMatch = () => {
+        dispatch(openMatchCreationModal());
+    };
+
+    const handleUpdateScore = (match) => {
+        // Prepare match data with proper structure for the modal
+        const opponentId = match.player1Id === currentUser.uid ? match.player2Id : match.player1Id;
+        const opponent = users[opponentId];
+        
+        const enrichedMatch = {
+            ...match,
+            currentUser: currentUser,
+            opponent: opponent ? {
+                id: opponent.id,
+                name: opponent.name || opponent.displayName || opponent.email,
+                displayName: opponent.displayName || opponent.name || opponent.email,
+                email: opponent.email,
+                photoURL: opponent.photoURL || null
+            } : {
+                id: opponentId,
+                name: `Player ${opponentId?.substring(0, 8) || 'Unknown'}`,
+                displayName: `Player ${opponentId?.substring(0, 8) || 'Unknown'}`,
+                email: null,
+                photoURL: null
+            }
+        };
+
+        setSelectedMatch(enrichedMatch);
+        setShowUpdateModal(true);
+    };
+
+    const handleCloseUpdateModal = () => {
+        setShowUpdateModal(false);
+        setSelectedMatch(null);
+    };
+
+    const handleScoreUpdated = () => {
+        // The real-time listener will automatically update the matches
+        console.log("Score updated, matches will refresh automatically");
+    };
+
+    // Helper functions (from old component)
+    const getOpponentName = (match) => {
+        const opponentId = match.player1Id === currentUser.uid ? match.player2Id : match.player1Id;
+        const opponent = users[opponentId];
+        return opponent?.name || opponent?.displayName || opponent?.email || 'Unknown Player';
+    };
+
+    const getStatusBadge = (status) => {
+        const statusConfig = {
+            'scheduled': { variant: 'primary', text: 'Scheduled' },
+            'in-progress': { variant: 'warning', text: 'In Progress' },
+            'completed': { variant: 'success', text: 'Completed' }
+        };
+        
+        const config = statusConfig[status] || { variant: 'secondary', text: status };
+        return <Badge bg={config.variant}>{config.text}</Badge>;
+    };
+
+    const canUpdateScore = (match) => {
+        // Only allow the match creator (player1) to update scores initially
+        // This can be expanded to allow both players if needed
+        return currentUser.uid === match.player1Id;
+    };
+
+    // Loading state
+    if (loading) {
+        return (
+            <Card className="h-100">
+                <Card.Header>
+                    <h5 className="mb-0">Ongoing Matches</h5>
+                </Card.Header>
+                <Card.Body>
+                    <div className="text-center py-4">
+                        <Spinner animation="border" role="status">
+                            <span className="visually-hidden">Loading ongoing matches...</span>
+                        </Spinner>
+                        <p className="mt-2 text-muted">Loading your ongoing matches...</p>
+                    </div>
+                </Card.Body>
+            </Card>
+        );
     }
 
-    return matchesData.matches.map(match => {
-      const isCurrentUserPlayer1 = match.player1Id === currentUser.uid;
-      const opponentId = isCurrentUserPlayer1 ? match.player2Id : match.player1Id;
-      const opponent = usersData.users.find(user => user.id === opponentId);
+    // Error state
+    if (error) {
+        return (
+            <Card className="h-100">
+                <Card.Header>
+                    <h5 className="mb-0">Ongoing Matches</h5>
+                </Card.Header>
+                <Card.Body>
+                    <Alert variant="danger">
+                        {error}
+                    </Alert>
+                </Card.Body>
+            </Card>
+        );
+    }
 
-      return {
-        ...match,
-        opponent,
-        isCurrentUserPlayer1,
-        canUpdateScore: isCurrentUserPlayer1 && match.status === 'in-progress',
-        displayScore: isCurrentUserPlayer1 
-          ? `${match.player1Score || 0} - ${match.player2Score || 0}`
-          : `${match.player2Score || 0} - ${match.player1Score || 0}`
-      };
-    });
-  }, [matchesData?.matches, usersData?.users, currentUser?.uid]);
+    // Empty state with Redux modal integration
+    if (matches.length === 0) {
+        return (
+            <Card className="h-100">
+                <Card.Header>
+                    <h5 className="mb-0">Ongoing Matches</h5>
+                </Card.Header>
+                <Card.Body>
+                    <div className="text-center py-4">
+                        <div className="mb-3">
+                            <i className="bi bi-calendar-x" style={{ fontSize: '3rem', color: '#6c757d' }}></i>
+                        </div>
+                        <h5 className="text-muted">No Ongoing Matches</h5>
+                        <p className="text-muted mb-3">
+                            You don't have any scheduled or in-progress matches at the moment.
+                        </p>
+                        <Button variant="success" size="sm" onClick={handleScheduleNewMatch}>
+                            <i className="bi bi-plus-circle me-1"></i>
+                            Create New Match
+                        </Button>
+                    </div>
+                </Card.Body>
+            </Card>
+        );
+    }
 
-  // Event handlers with useCallback for performance
-  const handleUpdateScore = useCallback((match) => {
-    setSelectedMatch(match);
-    setShowUpdateModal(true);
-  }, []);
+    // Matches display (from old component with working functionality)
+    return (
+        <>
+            <Card className="h-100">
+                <Card.Header>
+                    <div className="d-flex justify-content-between align-items-center">
+                        <h5 className="mb-0">Ongoing Matches</h5>
+                        <Badge bg="info">{matches.length} active</Badge>
+                    </div>
+                </Card.Header>
+                <Card.Body>
+                    <Row>
+                        {matches.map(match => (
+                            <Col key={match.id} md={6} lg={4} className="mb-3">
+                                <Card className="h-100">
+                                    <Card.Header className="d-flex justify-content-between align-items-center">
+                                        <small className="text-muted">
+                                            {match.date} at {match.time}
+                                        </small>
+                                        {getStatusBadge(match.status)}
+                                    </Card.Header>
+                                    <Card.Body>
+                                        <div className="text-center mb-3">
+                                            <h6 className="mb-2">vs {getOpponentName(match)}</h6>
+                                            <div className="fs-4 fw-bold text-primary">
+                                                {match.player1Score || 0} - {match.player2Score || 0}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="mb-3">
+                                            <small className="text-muted d-block">
+                                                <strong>Location:</strong> {match.location}
+                                            </small>
+                                            {match.notes && (
+                                                <small className="text-muted d-block">
+                                                    <strong>Notes:</strong> {match.notes}
+                                                </small>
+                                            )}
+                                        </div>
 
-  const handleCloseModal = useCallback(() => {
-    setSelectedMatch(null);
-    setShowUpdateModal(false);
-  }, []);
+                                        <div className="d-grid gap-2">
+                                            {canUpdateScore(match) ? (
+                                                <Button 
+                                                    variant="success" 
+                                                    size="sm"
+                                                    onClick={() => handleUpdateScore(match)}
+                                                >
+                                                    🏓 Update Score
+                                                </Button>
+                                            ) : (
+                                                <Button variant="outline-secondary" size="sm" disabled>
+                                                    Waiting for opponent to update
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </Card.Body>
+                                    <Card.Footer className="text-muted">
+                                        <small>
+                                            Created {new Date(match.scheduledDate?.toDate()).toLocaleDateString()}
+                                        </small>
+                                    </Card.Footer>
+                                </Card>
+                            </Col>
+                        ))}
+                    </Row>
+                </Card.Body>
+            </Card>
 
-  const handleScoreUpdated = useCallback(() => {
-    setSelectedMatch(null);
-    setShowUpdateModal(false);
-    // Refetch data to ensure consistency
-    refetchMatches();
-  }, [refetchMatches]);
-
-  // Determine loading and error states
-  const isLoading = matchesLoading || usersLoading;
-  const error = matchesError;
-
-  return (
-    <>
-      <DashboardCard
-        title="Ongoing Matches"
-        icon="🏓"
-        isLoading={isLoading}
-        error={error}
-        footerAction={processedMatches.length > 0 ? `${processedMatches.length} active match${processedMatches.length !== 1 ? 'es' : ''}` : null}
-      >
-        <OngoingMatchesList
-          matches={processedMatches}
-          loading={isLoading}
-          error={error}
-          onUpdateScore={handleUpdateScore}
-          currentUser={currentUser}
-        />
-      </DashboardCard>
-
-      {/* Score Update Modal */}
-      {selectedMatch && (
-        <UpdateScoreModal
-          show={showUpdateModal}
-          match={selectedMatch}
-          onClose={handleCloseModal}
-          onScoreUpdated={handleScoreUpdated}
-        />
-      )}
-    </>
-  );
-});
-
-OngoingMatchesCard.displayName = 'OngoingMatchesCard';
+            {/* Update Score Modal with proper data structure */}
+            {selectedMatch && (
+                <UpdateScoreModal
+                    show={showUpdateModal}
+                    handleClose={handleCloseUpdateModal}
+                    match={selectedMatch}
+                    onScoreUpdated={handleScoreUpdated}
+                />
+            )}
+        </>
+    );
+};
 
 export default OngoingMatchesCard;
+

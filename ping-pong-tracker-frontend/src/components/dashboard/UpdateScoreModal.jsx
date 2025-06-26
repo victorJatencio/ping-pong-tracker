@@ -1,25 +1,19 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Modal, Form, Button, Alert, Row, Col, Badge, Spinner } from 'react-bootstrap';
-import { useUpdateMatchScoreMutation } from '../../store/slices/apiSlice';
-import { validatePingPongScore, createScoreAuditEntry } from '../../utils/scoreValidation';
-import UserAvatar from '../common/UserAvatar';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 /**
- * Score update modal with comprehensive anti-cheating validation
+ * Fixed UpdateScoreModal that works with direct Firebase updates
  * Implements ping-pong rules and provides clear user feedback
  */
-const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) => {
-  const [player1Score, setPlayer1Score] = useState(match?.player1Score || 0);
-  const [player2Score, setPlayer2Score] = useState(match?.player2Score || 0);
+const UpdateScoreModal = React.memo(({ show, match, handleClose, onScoreUpdated }) => {
+  const [player1Score, setPlayer1Score] = useState(0);
+  const [player2Score, setPlayer2Score] = useState(0);
   const [notes, setNotes] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
-
-  const [updateMatchScore, { isLoading: isUpdating }] = useUpdateMatchScoreMutation();
-
-  // Real-time score validation
-  const validation = useMemo(() => {
-    return validatePingPongScore(player1Score, player2Score);
-  }, [player1Score, player2Score]);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState('');
 
   // Reset form when modal opens/closes
   React.useEffect(() => {
@@ -28,8 +22,44 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
       setPlayer2Score(match.player2Score || 0);
       setNotes('');
       setShowConfirmation(false);
+      setError('');
     }
   }, [show, match]);
+
+  // Simple ping-pong score validation
+  const validation = useMemo(() => {
+    const score1 = parseInt(player1Score) || 0;
+    const score2 = parseInt(player2Score) || 0;
+    const errors = [];
+    const warnings = [];
+
+    // Basic validation
+    if (score1 < 0 || score2 < 0) {
+      errors.push("Scores cannot be negative");
+    }
+
+    if (score1 > 50 || score2 > 50) {
+      errors.push("Scores seem unreasonably high");
+    }
+
+    // Ping-pong rules validation
+    const maxScore = Math.max(score1, score2);
+    const minScore = Math.min(score1, score2);
+    const scoreDiff = maxScore - minScore;
+
+    if (maxScore >= 21) {
+      if (scoreDiff < 2) {
+        errors.push("Winner must win by at least 2 points");
+      }
+    } else if (maxScore > 0) {
+      warnings.push("Match doesn't appear to be finished (scores under 21)");
+    }
+
+    const isValid = errors.length === 0;
+    const winner = score1 > score2 ? 'player1' : score2 > score1 ? 'player2' : null;
+
+    return { isValid, errors, warnings, winner };
+  }, [player1Score, player2Score]);
 
   // Handle score input changes with validation
   const handleScoreChange = useCallback((player, value) => {
@@ -48,7 +78,7 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
     }
   }, []);
 
-  // Handle form submission
+  // Handle form submission with direct Firebase update
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     
@@ -61,32 +91,47 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
       return;
     }
 
+    setIsUpdating(true);
+    setError('');
+
     try {
-      // Create audit trail entry
-      const auditEntry = createScoreAuditEntry(
-        match.id,
-        match.currentUser?.uid,
-        { player1Score: match.player1Score, player2Score: match.player2Score },
-        { player1Score, player2Score }
-      );
-
-      // Update match score
-      await updateMatchScore({
-        matchId: match.id,
-        player1Score,
-        player2Score,
-        currentUserId: match.currentUser?.uid,
-        opponentId: match.opponent?.id,
-        notes,
-        auditEntry
-      }).unwrap();
-
-      // Notify parent component
-      onScoreUpdated();
+      // Update match in Firebase
+      const matchRef = doc(db, 'matches', match.id);
       
+      await updateDoc(matchRef, {
+        player1Score: parseInt(player1Score),
+        player2Score: parseInt(player2Score),
+        status: 'completed',
+        completedDate: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        notes: notes.trim() || null,
+        // Add audit trail
+        lastUpdatedBy: match.currentUser?.uid || 'unknown',
+        scoreHistory: {
+          previousScore: {
+            player1Score: match.player1Score || 0,
+            player2Score: match.player2Score || 0
+          },
+          newScore: {
+            player1Score: parseInt(player1Score),
+            player2Score: parseInt(player2Score)
+          },
+          updatedAt: serverTimestamp(),
+          updatedBy: match.currentUser?.uid || 'unknown'
+        }
+      });
+
+      // Success - close modal and notify parent
+      setTimeout(() => {
+        setIsUpdating(false);
+        handleClose();
+        onScoreUpdated();
+      }, 1000); // Brief delay to show success state
+
     } catch (error) {
       console.error('Failed to update score:', error);
-      // Error handling is managed by RTK Query
+      setError('Failed to update score. Please try again.');
+      setIsUpdating(false);
     }
   }, [
     validation.isValid,
@@ -95,28 +140,53 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
     player1Score,
     player2Score,
     notes,
-    updateMatchScore,
+    handleClose,
     onScoreUpdated
   ]);
 
   // Handle modal close
-  const handleClose = useCallback(() => {
+  const handleModalClose = useCallback(() => {
     if (!isUpdating) {
       setShowConfirmation(false);
-      onClose();
+      setError('');
+      handleClose();
     }
-  }, [isUpdating, onClose]);
+  }, [isUpdating, handleClose]);
+
+  // Get opponent information from the match data
+  const getOpponentInfo = () => {
+    if (!match) return { name: 'Unknown Player', avatar: null };
+    
+    // The merged component should pass opponent info
+    if (match.opponent) {
+      return {
+        name: match.opponent.name || match.opponent.displayName || match.opponent.email || 'Unknown Player',
+        avatar: match.opponent.photoURL || null
+      };
+    }
+    
+    // Fallback: try to get opponent name from users data
+    const currentUserId = match.currentUser?.uid;
+    const opponentId = match.player1Id === currentUserId ? match.player2Id : match.player1Id;
+    
+    return {
+      name: `Player ${opponentId?.substring(0, 8) || 'Unknown'}`,
+      avatar: null
+    };
+  };
+
+  const opponent = getOpponentInfo();
 
   // Get player names for display
-  const player1Name = match?.isCurrentUserPlayer1 
-    ? 'You' 
-    : match?.opponent?.displayName || 'Opponent';
-  const player2Name = match?.isCurrentUserPlayer1 
-    ? match?.opponent?.displayName || 'Opponent'
-    : 'You';
+  const player1Name = match?.player1Id === match?.currentUser?.uid ? 'You' : opponent.name;
+  const player2Name = match?.player1Id === match?.currentUser?.uid ? opponent.name : 'You';
+
+  if (!match) {
+    return null;
+  }
 
   return (
-    <Modal show={show} onHide={handleClose} centered size="md">
+    <Modal show={show} onHide={handleModalClose} centered size="md">
       <Modal.Header closeButton>
         <Modal.Title>
           <i className="bi bi-trophy me-2"></i>
@@ -130,14 +200,29 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
           <div className="mb-4 p-3 bg-light rounded">
             <Row className="align-items-center">
               <Col xs="auto">
-                <UserAvatar user={match?.opponent} size={40} />
+                {opponent.avatar ? (
+                  <img 
+                    src={opponent.avatar} 
+                    alt={opponent.name}
+                    className="rounded-circle"
+                    width="40"
+                    height="40"
+                  />
+                ) : (
+                  <div 
+                    className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
+                    style={{ width: '40px', height: '40px' }}
+                  >
+                    {opponent.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
               </Col>
               <Col>
                 <div className="fw-bold">
-                  vs. {match?.opponent?.displayName || 'Unknown Player'}
+                  vs. {opponent.name}
                 </div>
                 <small className="text-muted">
-                  {match?.location && (
+                  {match.location && (
                     <>
                       <i className="bi bi-geo-alt me-1"></i>
                       {match.location}
@@ -147,6 +232,13 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
               </Col>
             </Row>
           </div>
+
+          {/* Error Display */}
+          {error && (
+            <Alert variant="danger" className="mb-3">
+              {error}
+            </Alert>
+          )}
 
           {/* Score Input */}
           <Row className="mb-4">
@@ -207,7 +299,7 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
           )}
 
           {/* Winner Display */}
-          {validation.isValid && (
+          {validation.isValid && validation.winner && (
             <div className="text-center mb-3">
               <Badge bg="success" className="px-3 py-2">
                 Winner: {validation.winner === 'player1' ? player1Name : player2Name}
@@ -245,6 +337,16 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
             </Form.Text>
           </Form.Group>
 
+          {/* Success State */}
+          {isUpdating && (
+            <Alert variant="success" className="mb-3">
+              <div className="d-flex align-items-center">
+                <Spinner animation="border" size="sm" className="me-2" />
+                <span>Updating score...</span>
+              </div>
+            </Alert>
+          )}
+
           {/* Anti-Cheating Information */}
           <Alert variant="info" className="small">
             <i className="bi bi-shield-check me-1"></i>
@@ -256,7 +358,7 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
         <Modal.Footer>
           <Button 
             variant="secondary" 
-            onClick={handleClose}
+            onClick={handleModalClose}
             disabled={isUpdating}
           >
             Cancel
@@ -299,3 +401,4 @@ const UpdateScoreModal = React.memo(({ show, match, onClose, onScoreUpdated }) =
 UpdateScoreModal.displayName = 'UpdateScoreModal';
 
 export default UpdateScoreModal;
+
