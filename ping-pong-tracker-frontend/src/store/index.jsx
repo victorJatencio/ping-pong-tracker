@@ -1,5 +1,6 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { apiSlice } from "./slices/apiSlice";
+import uiReducer from "./slices/uiSlice";
 // import authReducer from "./slices/authSlice";
 // import matchesReducer from "./slices/matchesSlice";
 // import leaderboardReducer from "./slices/leaderboardSlice";
@@ -8,6 +9,7 @@ export const store = configureStore({
   reducer: {
     // RTK Query API slice
     api: apiSlice.reducer,
+    ui: uiReducer,
   },
 
   // Add RTK Query middleware with proper serialization handling
@@ -18,9 +20,9 @@ export const store = configureStore({
           "api/executeQuery/pending",
           "api/executeQuery/fulfilled",
           "api/executeQuery/rejected",
-          "api/executeMutation/pending",
-          "api/executeMutation/fulfilled",
-          "api/executeMutation/rejected",
+          // "api/executeMutation/pending",
+          // "api/executeMutation/fulfilled",
+          // "api/executeMutation/rejected",
         ],
         ignoredPaths: [
           "api.queries",

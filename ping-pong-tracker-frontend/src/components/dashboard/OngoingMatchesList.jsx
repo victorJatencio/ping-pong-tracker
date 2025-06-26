@@ -1,5 +1,7 @@
 import React from 'react';
 import { Row, Col, Spinner, Alert, Button } from 'react-bootstrap';
+import { useDispatch } from 'react-redux';
+import { openMatchCreationModal } from '../../store/slices/uiSlice';
 import OngoingMatchItem from './OngoingMatchItem';
 
 /**
@@ -13,6 +15,12 @@ const OngoingMatchesList = React.memo(({
   onUpdateScore, 
   currentUser 
 }) => {
+  const dispatch = useDispatch();
+  
+  const handleScheduleNewMatch = () => {
+    dispatch(openMatchCreationModal());
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -49,7 +57,7 @@ const OngoingMatchesList = React.memo(({
         <p className="text-muted mb-3">
           You don't have any scheduled or in-progress matches at the moment.
         </p>
-        <Button variant="success" size="sm">
+        <Button variant="success" size="sm" onClick={handleScheduleNewMatch}>
           <i className="bi bi-plus-circle me-1"></i>
           Create New Match
         </Button>

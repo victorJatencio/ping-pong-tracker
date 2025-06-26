@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Button, Row, Col, Alert, Spinner } from 'react-bootstrap';
+import { useDispatch } from 'react-redux'; 
 import { useAuth } from '../../../../hooks/useAuth';
 import { db } from '../../../../config/firebase';
 import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { closeMatchCreationModal } from '../../../../store/slices/uiSlice';
 
-const MatchCreationModal = ({ show, handleClose }) => {
+const MatchCreationModal = ({ show, data }) => {
     const { currentUser } = useAuth();
+    const dispatch = useDispatch();
+
+    const handleClose = () => {
+        dispatch(closeMatchCreationModal());
+    };
 
     const [formData, setFormData] = useState({
         date: '',
@@ -13,7 +20,6 @@ const MatchCreationModal = ({ show, handleClose }) => {
         location: '',
         opponent: '', // This will be opponent's UID
         notes: ''
-        // Removed scorePlayer1 and scorePlayer2 - they'll default to 0
     });
     const [errors, setErrors] = useState({});
     const [successMessage, setSuccessMessage] = useState('');

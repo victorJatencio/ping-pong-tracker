@@ -9,6 +9,7 @@ import routes from './config/routes';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import 'react-toastify/dist/ReactToastify.css';
+import ModalManager from './components/common/ModalManagement'; 
 
 
 
@@ -31,6 +32,7 @@ function App() {
         <ThemeProvider>
           <BrowserRouter>
             <AppRoutes />
+            <ModalManager />
           </BrowserRouter>
         </ThemeProvider>
       </AuthProvider>

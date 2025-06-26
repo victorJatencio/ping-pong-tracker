@@ -1,15 +1,23 @@
-import React, { useState } from "react";
+import React from "react";
 import { Nav, Container, Button } from 'react-bootstrap';
-import { NavLink, useLocation, Link } from "react-router-dom";
-import MatchCreationModal from '../../match/MatchCreate/MatchCreationModal';
+import { NavLink, useLocation } from "react-router-dom";
+import { useDispatch } from 'react-redux';
+import { openMatchCreationModal } from '../../../store/slices/uiSlice';
+
 
 const TabNavigation = () => {
     const location = useLocation();
+    const dispatch = useDispatch();
+
 
     // Modal State Logic
-    const [showMatchModal, setShowMatchModal] = useState(false); 
-    const handleShowMatchModal = () => setShowMatchModal(true); // <--- HANDLER TO OPEN MODAL
-    const handleCloseMatchModal = () => setShowMatchModal(false); // <--- HANDLER TO CLOSE MODAL
+    // const [showMatchModal, setShowMatchModal] = useState(false); 
+
+    const handleShowMatchModal = () => {
+        dispatch(openMatchCreationModal());
+    };
+    
+    // const handleCloseMatchModal = () => setShowMatchModal(false); // <--- HANDLER TO CLOSE MODAL
 
     // Define tabs with their routes and labels
     const tabs = [
@@ -62,10 +70,10 @@ const TabNavigation = () => {
             </Container>
 
             {/* Match Creation Modal */}
-            <MatchCreationModal 
+            {/* <MatchCreationModal 
                 show={showMatchModal} 
                 handleClose={handleCloseMatchModal} 
-            />
+            /> */}
         </Container>
     );
 };

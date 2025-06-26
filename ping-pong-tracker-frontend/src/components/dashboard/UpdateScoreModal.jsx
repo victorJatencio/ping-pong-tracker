@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Modal, Form, Button, Alert, Row, Col, Badge, Spinner } from 'react-bootstrap';
 import { useUpdateMatchScoreMutation } from '../../store/slices/apiSlice';
 import { validatePingPongScore, createScoreAuditEntry } from '../../utils/scoreValidation';
-import UserAvatar from '../../common/UserAvatar';
+import UserAvatar from '../common/UserAvatar';
 
 /**
  * Score update modal with comprehensive anti-cheating validation
