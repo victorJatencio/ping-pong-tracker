@@ -203,9 +203,7 @@ const OngoingMatches = () => {
                                         </Button>
                                     )}
                                     
-                                    <Button variant="outline-primary" size="sm">
-                                        View Details
-                                    </Button>
+                                    
                                 </div>
                             </Card.Body>
                             <Card.Footer className="text-muted">

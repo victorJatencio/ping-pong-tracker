@@ -12,6 +12,18 @@ import {
   Timestamp,
 } from "firebase/firestore";
 
+// Import utility functions (you'll need to create these files)
+// import { validatePingPongScore } from "../../utils/scoreValidation";
+// import { createScoreUpdateNotification, createScoreAuditEntry, storeAuditEntry } from "../../utils/auditTrail";
+// import { generateNotificationId } from "../../utils/notifications";
+
+// Temporary placeholder functions (remove these when you create the actual utility files)
+const validatePingPongScore = (score1, score2) => ({ isValid: true, errors: [] });
+const createScoreUpdateNotification = (user, match, score) => ({});
+const createScoreAuditEntry = (...args) => ({});
+const storeAuditEntry = (entry) => Promise.resolve();
+const generateNotificationId = () => `notif_${Date.now()}`;
+
 // Firebase-based base query function
 const firebaseBaseQuery = () => async (args) => {
   try {
@@ -54,7 +66,7 @@ const firebaseBaseQuery = () => async (args) => {
 export const apiSlice = createApi({
   reducerPath: "api",
   baseQuery: firebaseBaseQuery(),
-  tagTypes: ["Match", "User", "Invitation", "Stats"],
+  tagTypes: ["Match", "User", "Invitation", "Stats", "Notifications", "OngoingMatches", "RecentMatches"],
   endpoints: (builder) => ({
     // Get all recent matches (for Recent Matches card - shows matches from ALL users)
     getAllRecentMatches: builder.query({
@@ -286,17 +298,6 @@ export const apiSlice = createApi({
 
           // Store audit entry
           await storeAuditEntry(auditEntry);
-
-          // Create notification for opponent
-          // dispatch(
-          //   apiSlice.endpoints.createNotification.initiate({
-          //     recipientId: arg.opponentId,
-          //     type: "match_completed",
-          //     title: "Match Completed",
-          //     message: `Your match has been completed with a final score of ${player1Score}-${player2Score}`,
-          //     data: { matchId, finalScore: `${player1Score}-${player2Score}` },
-          //   })
-          // );
         } catch (error) {
           // Revert optimistic update on failure
           patchResult.undo();
@@ -359,24 +360,6 @@ export const apiSlice = createApi({
           console.error("Failed to update match status:", error);
         }
       },
-    }),
-
-    // Create notification for match updates
-    createNotification: builder.mutation({
-      query: (notification) => ({
-        url: "/firebase/create",
-        method: "POST",
-        body: {
-          collection: "notifications",
-          data: {
-            ...notification,
-            createdAt: new Date(),
-            read: false,
-            archived: false,
-          },
-        },
-      }),
-      invalidatesTags: ["Notifications"],
     }),
 
     // Get pending invitations
@@ -452,106 +435,109 @@ export const apiSlice = createApi({
           limit: 50,
         },
       }),
+      transformResponse: (response) => {
+        if (!response?.documents) return { notifications: [], unreadCount: 0 };
+
+        const notifications = response.documents.map((doc) => ({
+          id: doc.id,
+          ...doc.data,
+          createdAt:
+            doc.data.createdAt?.toDate?.() || new Date(doc.data.createdAt),
+        }));
+
+        const unreadCount = notifications.filter((n) => !n.read).length;
+
+        return { notifications, unreadCount };
+      },
+      providesTags: ["Notifications"],
+      keepUnusedDataFor: 300,
     }),
-    transformResponse: (response) => {
-      if (!response?.documents) return { notifications: [], unreadCount: 0 };
 
-      const notifications = response.documents.map((doc) => ({
-        id: doc.id,
-        ...doc.data,
-        createdAt:
-          doc.data.createdAt?.toDate?.() || new Date(doc.data.createdAt),
-      }));
-
-      const unreadCount = notifications.filter((n) => !n.read).length;
-
-      return { notifications, unreadCount };
-    },
-    providesTags: ["Notifications"],
-    keepUnusedDataFor: 300,
-  }),
-
-  // Create notification
-  createNotification: builder.mutation({
-    query: (notification) => ({
-      url: "/firebase/create",
-      method: "POST",
-      body: {
-        collection: "notifications",
-        data: {
-          ...notification,
+    // Create notification
+    createNotification: builder.mutation({
+      query: (notification) => ({
+        url: "/firebase/create",
+        method: "POST",
+        body: {
+          collection: "notifications",
+          data: {
+            ...notification,
+            createdAt: new Date(),
+            read: false,
+            archived: false,
+            id: generateNotificationId(),
+          },
+        },
+      }),
+      invalidatesTags: ["Notifications"],
+      onQueryStarted: async (arg, { dispatch, queryFulfilled }) => {
+        // Optimistic update for immediate UI feedback
+        const tempId = `temp-${Date.now()}`;
+        const optimisticNotification = {
+          id: tempId,
+          ...arg,
           createdAt: new Date(),
           read: false,
           archived: false,
-          id: generateNotificationId(),
-        },
-      },
-    }),
-    invalidatesTags: ["Notifications"],
-    onQueryStarted: async (arg, { dispatch, queryFulfilled }) => {
-      // Optimistic update for immediate UI feedback
-      const tempId = `temp-${Date.now()}`;
-      const optimisticNotification = {
-        id: tempId,
-        ...arg,
-        createdAt: new Date(),
-        read: false,
-        archived: false,
-        _optimistic: true,
-      };
+          _optimistic: true,
+        };
 
-      const patchResult = dispatch(
-        apiSlice.util.updateQueryData(
-          "getNotifications",
-          arg.recipientId,
-          (draft) => {
-            draft.notifications.unshift(optimisticNotification);
-            draft.unreadCount += 1;
-          }
-        )
-      );
-
-      try {
-        await queryFulfilled;
-      } catch {
-        patchResult.undo();
-      }
-    },
-  }),
-
-  // Mark notification as read
-  markNotificationRead: builder.mutation({
-    query: ({ notificationId, userId }) => ({
-      url: "/firebase/update",
-      method: "POST",
-      body: {
-        collection: "notifications",
-        docId: notificationId,
-        data: {
-          read: true,
-          readAt: new Date(),
-        },
-      },
-    }),
-    invalidatesTags: ["Notifications"],
-    onQueryStarted: async (arg, { dispatch, queryFulfilled }) => {
-      // Optimistic update
-      const patchResult = dispatch("getNotifications", arg.userId, (draft) => {
-        const notification = draft.notifications.find(
-          (n) => n.id === arg.notificationId
+        const patchResult = dispatch(
+          apiSlice.util.updateQueryData(
+            "getNotifications",
+            arg.recipientId,
+            (draft) => {
+              draft.notifications.unshift(optimisticNotification);
+              draft.unreadCount += 1;
+            }
+          )
         );
-        if (notification && !notification.read) {
-          notification.read = true;
-          notification.readAt = new Date();
-          draft.unreadCount = Math.max(0, draft.unreadCount - 1);
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
         }
-      });
-      try {
-        await queryFulfilled;
-      } catch {
-        patchResult.undo();
-      }
-    },
+      },
+    }),
+
+    // Mark notification as read
+    markNotificationRead: builder.mutation({
+      query: ({ notificationId, userId }) => ({
+        url: "/firebase/update",
+        method: "POST",
+        body: {
+          collection: "notifications",
+          docId: notificationId,
+          data: {
+            read: true,
+            readAt: new Date(),
+          },
+        },
+      }),
+      invalidatesTags: ["Notifications"],
+      onQueryStarted: async (arg, { dispatch, queryFulfilled }) => {
+        // Optimistic update
+        const patchResult = dispatch(
+          apiSlice.util.updateQueryData("getNotifications", arg.userId, (draft) => {
+            const notification = draft.notifications.find(
+              (n) => n.id === arg.notificationId
+            );
+            if (notification && !notification.read) {
+              notification.read = true;
+              notification.readAt = new Date();
+              draft.unreadCount = Math.max(0, draft.unreadCount - 1);
+            }
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+    }),
+
     // Mark all notifications as read
     markAllNotificationsRead: builder.mutation({
       query: (userId) => ({
@@ -603,4 +589,11 @@ export const {
   useGetAllUsersQuery,
   useGetUserStatsQuery,
   useGetLeaderboardQuery,
+  useGetNotificationsQuery,
+  useCreateNotificationMutation,
+  useMarkNotificationReadMutation,
+  useMarkAllNotificationsReadMutation,
+  useUpdateMatchScoreMutation,
+  useUpdateMatchStatusMutation,
 } = apiSlice;
+
