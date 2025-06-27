@@ -24,7 +24,7 @@ import { collection, getDocs } from "firebase/firestore";
 import RecentMatchesCard from "../../components/dashboard/RecentMatchesCard";
 
 // Import Pending Invitations Card
-import PendingInvitationsCard from "../../components/dashboard/PendingInvitationsCard";
+import PendingInvitationsCard from '../../components/dashboard/PendingInvitationsCard';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);

@@ -1,115 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
-import { useGetPendingInvitationsQuery, useGetAllUsersQuery, useAcceptInvitationMutation, useDeclineInvitationMutation } from '../../store/slices/apiSlice';
 import { useAuth } from '../../hooks/useAuth';
+import { 
+  useGetSentInvitationsQuery, 
+  useGetReceivedInvitationsQuery,
+  useGetAllUsersQuery 
+} from '../../store/slices/apiSlice';
 import DashboardCard from '../common/Card';
-import PendingInvitationItem from './PendingInvitationItem';
-import './PendingInvitationsCard.scss';
+import SentInvitationItem from './SentInvitationItem';
+import ReceivedInvitationItem from './ReceivedInvitationItem';
 
-/**
- * PendingInvitationsCard Component
- * Displays pending invitations with accept/decline functionality
- * Follows the same patterns as OngoingMatchesCard
- */
 const PendingInvitationsCard = () => {
   const { currentUser } = useAuth();
-  const [enrichedInvitations, setEnrichedInvitations] = useState([]);
-  
-  // Fetch pending invitations for current user
+  const [activeTab, setActiveTab] = useState('received'); // 'received' or 'sent'
+
+  // Fetch sent invitations (where user is sender)
   const {
-    data: invitationsData,
-    error: invitationsError,
-    isLoading: invitationsLoading,
-    refetch: refetchInvitations
-  } = useGetPendingInvitationsQuery(currentUser?.uid, {
+    data: sentInvitations,
+    error: sentError,
+    isLoading: sentLoading,
+  } = useGetSentInvitationsQuery(currentUser?.uid, {
     skip: !currentUser?.uid,
-    pollingInterval: 30000, // Poll every 30 seconds for real-time updates
+    pollingInterval: 30000,
   });
 
-  // Fetch all users for sender information
+  // Fetch received invitations (where user is recipient)
   const {
-    data: usersData,
-    error: usersError,
-    isLoading: usersLoading
-  } = useGetAllUsersQuery();
+    data: receivedInvitations,
+    error: receivedError,
+    isLoading: receivedLoading,
+  } = useGetReceivedInvitationsQuery(currentUser?.uid, {
+    skip: !currentUser?.uid,
+    pollingInterval: 30000,
+  });
 
-  // Mutation hooks for accepting/declining invitations
-  const [acceptInvitation, { isLoading: isAccepting }] = useAcceptInvitationMutation();
-  const [declineInvitation, { isLoading: isDeclining }] = useDeclineInvitationMutation();
+  // Fetch all users for enrichment
+  const { data: usersData } = useGetAllUsersQuery();
 
-  // Enrich invitations with sender information
-  useEffect(() => {
-    if (invitationsData && usersData) {
-      const enriched = invitationsData.map(invitation => {
-        const sender = usersData[invitation.senderId];
-        return {
-          ...invitation,
-          sender: sender || {
-            uid: invitation.senderId,
-            displayName: 'Unknown User',
-            profileImageUrl: 'https://i.pravatar.cc/150?u=unknown'
-          }
-        };
-      });
-      setEnrichedInvitations(enriched);
-    }
-  }, [invitationsData, usersData]);
+  const isLoading = sentLoading || receivedLoading;
+  const hasError = sentError || receivedError;
 
-    // Add debugging logs
-useEffect(() => {
-  console.log('=== PENDING INVITATIONS DEBUG ===');
-  console.log('Current User:', currentUser);
-  console.log('Current User ID:', currentUser?.uid);
-  console.log('Invitations Data:', invitationsData);
-  console.log('Invitations Error:', invitationsError);
-  console.log('Invitations Loading:', invitationsLoading);
-  console.log('Users Data:', usersData);
-  console.log('Users Error:', usersError);
-  console.log('Enriched Invitations:', enrichedInvitations);
-  console.log('=================================');
-}, [currentUser, invitationsData, invitationsError, invitationsLoading, usersData, usersError, enrichedInvitations]);
+  // Get counts for tab display
+  const receivedCount = receivedInvitations?.length || 0;
+  const sentCount = sentInvitations?.filter(inv => inv.status === 'pending').length || 0;
 
-  // Handle accepting an invitation
-  const handleAcceptInvitation = async (invitation) => {
-    try {
-      await acceptInvitation({
-        invitationId: invitation.id,
-        currentUserId: currentUser.uid,
-        invitation: invitation // Pass full invitation for match creation
-      }).unwrap();
-      
-      // Show success feedback
-      console.log('Invitation accepted successfully');
-      
-      // Refetch to ensure UI is updated
-      refetchInvitations();
-    } catch (error) {
-      console.error('Failed to accept invitation:', error);
-      // TODO: Show error notification to user
-    }
-  };
-
-  // Handle declining an invitation
-  const handleDeclineInvitation = async (invitation) => {
-    try {
-      await declineInvitation({
-        invitationId: invitation.id,
-        currentUserId: currentUser.uid
-      }).unwrap();
-      
-      // Show success feedback
-      console.log('Invitation declined');
-      
-      // Refetch to ensure UI is updated
-      refetchInvitations();
-    } catch (error) {
-      console.error('Failed to decline invitation:', error);
-      // TODO: Show error notification to user
-    }
-  };
-
-  // Loading state
-  if (invitationsLoading || usersLoading) {
+  if (isLoading) {
     return (
       <DashboardCard
         title="Pending Invitations"
@@ -118,87 +52,100 @@ useEffect(() => {
     );
   }
 
-  // Error state
-  if (invitationsError || usersError) {
+  if (hasError) {
     return (
       <DashboardCard
         title="Pending Invitations"
-        error="Unable to load invitations"
-      />
+        footerAction={
+          <button className="btn btn-primary btn-sm">
+            View All Matches
+          </button>
+        }
+      >
+        <div className="text-center py-8">
+          <p className="text-red-600">Error loading invitations</p>
+        </div>
+      </DashboardCard>
     );
   }
 
-  // Empty state
-  if (!enrichedInvitations || enrichedInvitations.length === 0) {
-    return (
-      <DashboardCard
-      title="Pending Invitations"
-      subtitle={`Debug: ${invitationsData?.length || 0} invitations found`}
-      // Remove the emptyState prop completely
-      footerAction={
-        <button 
-          className="btn btn-primary btn-sm"
-          onClick={() => {
-            console.log('Navigate to matches page');
-          }}
-        >
-          View All Matches
-        </button>
-      }
-    >
-      {/* Add the empty state content as children instead */}
-      <div className="text-center py-8">
-        <p className="text-lg font-semibold text-gray-600">No Pending Invitations</p>
-        <p><strong>Current User ID:</strong> {currentUser?.uid || 'Not logged in'}</p>
-        <p><strong>Invitations Count:</strong> {invitationsData?.length || 0}</p>
-        <p><strong>Invitations Error:</strong> {invitationsError ? JSON.stringify(invitationsError) : 'None'}</p>
-        <p><strong>Raw Invitations Data:</strong></p>
-        <pre style={{fontSize: '12px', background: '#f5f5f5', padding: '10px', overflow: 'auto'}}>
-        {JSON.stringify(invitationsData, null, 2)}
-      </pre>
-      <p><strong>Users Data Keys:</strong> {usersData ? Object.keys(usersData).join(', ') : 'None'}</p>
-        <p className="text-sm text-gray-500 mt-2">You don't have any pending match invitations at the moment.</p>
-      </div>
-    </DashboardCard>
-    );
-  }
-
-  // Display invitations (limit to 3 for dashboard)
-  const displayInvitations = enrichedInvitations.slice(0, 3);
+  const currentInvitations = activeTab === 'received' ? receivedInvitations : sentInvitations;
+  const isEmpty = !currentInvitations || currentInvitations.length === 0;
 
   return (
     <DashboardCard
       title="Pending Invitations"
-      subtitle={`${enrichedInvitations.length} invitation${enrichedInvitations.length !== 1 ? 's' : ''} waiting for response`}
       footerAction={
-        enrichedInvitations.length > 3 ? (
-          <button 
-            className="btn btn-outline btn-sm"
-            onClick={() => {
-              // TODO: Navigate to full invitations page
-              console.log('Navigate to all invitations');
-            }}
-          >
-            View All ({enrichedInvitations.length})
-          </button>
-        ) : null
+        <button className="btn btn-primary btn-sm">
+          View All Matches
+        </button>
       }
     >
-      <div className="pending-invitations-list">
-        {displayInvitations.map((invitation) => (
-          <PendingInvitationItem
-            key={invitation.id}
-            invitation={invitation}
-            onAccept={() => handleAcceptInvitation(invitation)}
-            onDecline={() => handleDeclineInvitation(invitation)}
-            isAccepting={isAccepting}
-            isDeclining={isDeclining}
-          />
-        ))}
+      {/* Tab Navigation */}
+      <div className="flex border-b mb-4">
+        <button
+          onClick={() => setActiveTab('received')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 ${
+            activeTab === 'received'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Received ({receivedCount})
+        </button>
+        <button
+          onClick={() => setActiveTab('sent')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 ${
+            activeTab === 'sent'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Sent ({sentCount})
+        </button>
       </div>
+
+      {/* Content */}
+      {isEmpty ? (
+        <div className="text-center py-8">
+          <p className="text-lg font-semibold text-gray-600">
+            No {activeTab} invitations
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            {activeTab === 'received' 
+              ? "You don't have any pending match invitations at the moment."
+              : "You haven't sent any invitations recently."
+            }
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {currentInvitations.map((invitation) => {
+            if (activeTab === 'received') {
+              const sender = usersData?.[invitation.senderId];
+              return (
+                <ReceivedInvitationItem
+                  key={invitation.id}
+                  invitation={invitation}
+                  sender={sender}
+                  currentUserId={currentUser?.uid}
+                />
+              );
+            } else {
+              const recipient = usersData?.[invitation.recipientId];
+              return (
+                <SentInvitationItem
+                  key={invitation.id}
+                  invitation={invitation}
+                  recipient={recipient}
+                />
+              );
+            }
+          })}
+        </div>
+      )}
     </DashboardCard>
   );
 };
 
 export default PendingInvitationsCard;
-

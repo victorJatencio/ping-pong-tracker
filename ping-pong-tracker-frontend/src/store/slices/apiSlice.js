@@ -28,18 +28,18 @@ const createScoreUpdateNotification = (user, match, score) => ({
   type: "score_update",
   title: "Match Score Updated",
   message: `Match score updated to ${score}`,
-  data: { matchId: match?.id, score }
+  data: { matchId: match?.id, score },
 });
 
 const createScoreAuditEntry = (...args) => ({
   id: `audit_${Date.now()}`,
   timestamp: new Date(),
   action: "score_update",
-  data: args
+  data: args,
 });
 
 const storeAuditEntry = (entry) => {
-  console.log('Audit entry:', entry);
+  console.log("Audit entry:", entry);
   return Promise.resolve();
 };
 
@@ -50,7 +50,13 @@ const generateNotificationId = () => {
 // Firebase-based base query function with direct Firebase calls
 const firebaseBaseQuery = () => async (args) => {
   try {
-    const { collection: collectionName, queryConstraints = [], docId, updateData, createData } = args;
+    const {
+      collection: collectionName,
+      queryConstraints = [],
+      docId,
+      updateData,
+      createData,
+    } = args;
 
     // Handle document updates
     if (updateData && docId) {
@@ -218,18 +224,42 @@ export const apiSlice = createApi({
       },
     }),
 
-    // Get pending invitations
-    getPendingInvitations: builder.query({
+    // Get invitations SENT by current user (waiting for response)
+    getSentInvitations: builder.query({
       query: (userId) => ({
         collection: "invitations",
         queryConstraints: [
           where("senderId", "==", userId),
+          where("status", "in", ["pending", "accepted", "declined"]),
+          orderBy("createdAt", "desc"),
+          limit(10),
+        ],
+      }),
+      providesTags: ["SentInvitation"],
+      transformResponse: (response) => {
+        return response.map((invitation) => ({
+          ...invitation,
+          createdAt:
+            invitation.createdAt?.toDate?.() || new Date(invitation.createdAt),
+          scheduledDate:
+            invitation.scheduledDate?.toDate?.() ||
+            new Date(invitation.scheduledDate),
+        }));
+      },
+    }),
+
+    // Get invitations RECEIVED by current user (need to respond)
+    getReceivedInvitations: builder.query({
+      query: (userId) => ({
+        collection: "invitations",
+        queryConstraints: [
+          where("recipientId", "==", userId),
           where("status", "==", "pending"),
           orderBy("createdAt", "desc"),
           limit(10),
         ],
       }),
-      providesTags: ["Invitation"],
+      providesTags: ["ReceivedInvitation"],
       transformResponse: (response) => {
         return response.map((invitation) => ({
           ...invitation,
@@ -347,23 +377,22 @@ export const apiSlice = createApi({
         updateData: {
           status: "accepted",
           acceptedAt: new Date(),
-          lastUpdatedBy: currentUserId,
+          updatedAt: new Date(),
         },
       }),
-      invalidatesTags: ["Invitation"],
+      invalidatesTags: ["ReceivedInvitation", "SentInvitation", "Match"],
       onQueryStarted: async (arg, { dispatch, queryFulfilled }) => {
-        // Optimistic update for immediate UI feedback
-        const { invitationId, currentUserId } = arg;
-        const patchResult = dispatch(
+        // Optimistic update for recipient
+        const patchReceived = dispatch(
           apiSlice.util.updateQueryData(
-            "getPendingInvitations",
-            currentUserId,
+            "getReceivedInvitations",
+            arg.currentUserId,
             (draft) => {
-              const invitationIndex = draft.findIndex(
-                (inv) => inv.id === invitationId
+              const index = draft.findIndex(
+                (inv) => inv.id === arg.invitationId
               );
-              if (invitationIndex !== -1) {
-                draft.splice(invitationIndex, 1); // Remove from pending list
+              if (index !== -1) {
+                draft.splice(index, 1); // Remove from pending
               }
             }
           )
@@ -371,10 +400,8 @@ export const apiSlice = createApi({
 
         try {
           await queryFulfilled;
-          console.log('Invitation accepted successfully');
         } catch (error) {
-          patchResult.undo();
-          console.error("Failed to accept invitation:", error);
+          patchReceived.undo();
         }
       },
     }),
@@ -387,23 +414,22 @@ export const apiSlice = createApi({
         updateData: {
           status: "declined",
           declinedAt: new Date(),
-          lastUpdatedBy: currentUserId,
+          updatedAt: new Date(),
         },
       }),
-      invalidatesTags: ["Invitation"],
+      invalidatesTags: ["ReceivedInvitation", "SentInvitation"],
       onQueryStarted: async (arg, { dispatch, queryFulfilled }) => {
-        // Optimistic update for immediate UI feedback
-        const { invitationId, currentUserId } = arg;
-        const patchResult = dispatch(
+        // Similar optimistic update logic
+        const patchReceived = dispatch(
           apiSlice.util.updateQueryData(
-            "getPendingInvitations",
-            currentUserId,
+            "getReceivedInvitations",
+            arg.currentUserId,
             (draft) => {
-              const invitationIndex = draft.findIndex(
-                (inv) => inv.id === invitationId
+              const index = draft.findIndex(
+                (inv) => inv.id === arg.invitationId
               );
-              if (invitationIndex !== -1) {
-                draft.splice(invitationIndex, 1); // Remove from pending list
+              if (index !== -1) {
+                draft.splice(index, 1);
               }
             }
           )
@@ -411,12 +437,39 @@ export const apiSlice = createApi({
 
         try {
           await queryFulfilled;
-          console.log('Invitation declined successfully');
         } catch (error) {
-          patchResult.undo();
-          console.error("Failed to decline invitation:", error);
+          patchReceived.undo();
         }
       },
+    }),
+
+    // Cancel invitation (senders only)
+    cancelInvitation: builder.mutation({
+      query: ({ invitationId, currentUserId }) => ({
+        collection: "invitations",
+        docId: invitationId,
+        updateData: {
+          status: "cancelled",
+          cancelledAt: new Date(),
+          updatedAt: new Date(),
+        },
+      }),
+      invalidatesTags: ["SentInvitation", "ReceivedInvitation"],
+    }),
+
+    // Cancel match (when invitation declined)
+    cancelMatch: builder.mutation({
+      query: ({ matchId, currentUserId }) => ({
+        collection: "matches",
+        docId: matchId,
+        updateData: {
+          status: "cancelled",
+          cancelledAt: new Date(),
+          cancelledBy: currentUserId,
+          updatedAt: new Date(),
+        },
+      }),
+      invalidatesTags: ["Match", "OngoingMatches"],
     }),
 
     // Send invitation
@@ -511,7 +564,7 @@ export const {
   useGetUserMatchesQuery,
   useGetUpcomingMatchesQuery,
   useGetOngoingMatchesQuery,
-  useGetPendingInvitationsQuery,
+  // useGetPendingInvitationsQuery,
   useGetAllUsersQuery,
   useGetUserStatsQuery,
   useGetLeaderboardQuery,
@@ -525,5 +578,8 @@ export const {
   useDeclineInvitationMutation,
   useSendInvitationMutation,
   useCreateMatchMutation,
+  useGetSentInvitationsQuery,
+  useGetReceivedInvitationsQuery,
+  useCancelInvitationMutation,
+  useCancelMatchMutation,
 } = apiSlice;
-
