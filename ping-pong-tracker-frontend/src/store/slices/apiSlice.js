@@ -223,7 +223,7 @@ export const apiSlice = createApi({
       query: (userId) => ({
         collection: "invitations",
         queryConstraints: [
-          where("recipientId", "==", userId),
+          where("senderId", "==", userId),
           where("status", "==", "pending"),
           orderBy("createdAt", "desc"),
           limit(10),

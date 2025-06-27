@@ -55,6 +55,20 @@ const PendingInvitationsCard = () => {
     }
   }, [invitationsData, usersData]);
 
+    // Add debugging logs
+useEffect(() => {
+  console.log('=== PENDING INVITATIONS DEBUG ===');
+  console.log('Current User:', currentUser);
+  console.log('Current User ID:', currentUser?.uid);
+  console.log('Invitations Data:', invitationsData);
+  console.log('Invitations Error:', invitationsError);
+  console.log('Invitations Loading:', invitationsLoading);
+  console.log('Users Data:', usersData);
+  console.log('Users Error:', usersError);
+  console.log('Enriched Invitations:', enrichedInvitations);
+  console.log('=================================');
+}, [currentUser, invitationsData, invitationsError, invitationsLoading, usersData, usersError, enrichedInvitations]);
+
   // Handle accepting an invitation
   const handleAcceptInvitation = async (invitation) => {
     try {
@@ -119,6 +133,7 @@ const PendingInvitationsCard = () => {
     return (
       <DashboardCard
       title="Pending Invitations"
+      subtitle={`Debug: ${invitationsData?.length || 0} invitations found`}
       // Remove the emptyState prop completely
       footerAction={
         <button 
@@ -134,6 +149,14 @@ const PendingInvitationsCard = () => {
       {/* Add the empty state content as children instead */}
       <div className="text-center py-8">
         <p className="text-lg font-semibold text-gray-600">No Pending Invitations</p>
+        <p><strong>Current User ID:</strong> {currentUser?.uid || 'Not logged in'}</p>
+        <p><strong>Invitations Count:</strong> {invitationsData?.length || 0}</p>
+        <p><strong>Invitations Error:</strong> {invitationsError ? JSON.stringify(invitationsError) : 'None'}</p>
+        <p><strong>Raw Invitations Data:</strong></p>
+        <pre style={{fontSize: '12px', background: '#f5f5f5', padding: '10px', overflow: 'auto'}}>
+        {JSON.stringify(invitationsData, null, 2)}
+      </pre>
+      <p><strong>Users Data Keys:</strong> {usersData ? Object.keys(usersData).join(', ') : 'None'}</p>
         <p className="text-sm text-gray-500 mt-2">You don't have any pending match invitations at the moment.</p>
       </div>
     </DashboardCard>
