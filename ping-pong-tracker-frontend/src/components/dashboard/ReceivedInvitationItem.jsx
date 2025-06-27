@@ -1,77 +1,105 @@
-// src/components/dashboard/ReceivedInvitationItem.jsx
 import React from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { useAcceptInvitationMutation, useDeclineInvitationMutation } from '../../store/slices/apiSlice';
 
-const ReceivedInvitationItem = ({ invitation, sender, currentUserId }) => {
-  const [acceptInvitation, { isLoading: isAccepting }] = useAcceptInvitationMutation();
-  const [declineInvitation, { isLoading: isDeclining }] = useDeclineInvitationMutation();
-
-  const handleAccept = async () => {
-    try {
-      await acceptInvitation({
-        invitationId: invitation.id,
-        currentUserId,
-      });
-    } catch (error) {
-      console.error('Failed to accept invitation:', error);
-    }
+const ReceivedInvitationItem = ({ 
+  invitation, 
+  sender, 
+  currentUserId, 
+  onAccept, 
+  onDecline, 
+  isAccepting, 
+  isDeclining 
+}) => {
+  const handleAcceptClick = () => {
+    onAccept(invitation.id);
   };
 
-  const handleDecline = async () => {
+  const handleDeclineClick = () => {
+    onDecline(invitation.id);
+  };
+
+  // Format the invitation date
+  const formatDate = (date) => {
+    if (!date) return 'Unknown time';
+    
     try {
-      await declineInvitation({
-        invitationId: invitation.id,
-        currentUserId,
-      });
+      // Handle Firebase Timestamp or Date object
+      const dateObj = date.toDate ? date.toDate() : new Date(date);
+      return formatDistanceToNow(dateObj, { addSuffix: true });
     } catch (error) {
-      console.error('Failed to decline invitation:', error);
+      console.error('Error formatting date:', error);
+      return 'Unknown time';
     }
   };
 
   return (
-    <div className="received-invitation-item p-4 border rounded-lg">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <img
-            src={sender?.profileImageUrl || 'https://i.pravatar.cc/150?u=default'}
-            alt={sender?.displayName || 'Unknown User'}
-            className="w-10 h-10 rounded-full"
-          />
-          <div>
-            <h4 className="font-medium">{sender?.displayName || 'Unknown User'}</h4>
-            <p className="text-sm text-gray-500">{invitation.message}</p>
-            <p className="text-xs text-gray-400">
-              Received {formatDistanceToNow(invitation.createdAt)} ago
-            </p>
+    <div className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+      {/* Sender Info */}
+      <div className="flex items-center space-x-3">
+        <img
+          src={sender?.profileImageUrl || `https://i.pravatar.cc/150?u=${invitation.senderId}`}
+          alt={sender?.displayName || 'Unknown User'}
+          className="w-10 h-10 rounded-full object-cover"
+        />
+        <div>
+          <h4 className="font-medium text-gray-900">
+            {sender?.displayName || 'Unknown User'}
+          </h4>
+          <p className="text-sm text-gray-600">{invitation.message}</p>
+          <div className="flex items-center space-x-4 text-xs text-gray-500 mt-1">
+            <span>📍 {invitation.location}</span>
+            <span>📅 {invitation.date}</span>
+            <span>🕐 {invitation.time}</span>
           </div>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleDecline}
-            disabled={isDeclining || isAccepting}
-            className="px-3 py-1 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50 disabled:opacity-50"
-          >
-            {isDeclining ? 'Declining...' : 'Decline'}
-          </button>
-          
-          <button
-            onClick={handleAccept}
-            disabled={isAccepting || isDeclining}
-            className="px-3 py-1 text-sm text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50"
-          >
-            {isAccepting ? 'Accepting...' : 'Accept'}
-          </button>
+          <p className="text-xs text-gray-400 mt-1">
+            Sent {formatDate(invitation.createdAt)}
+          </p>
         </div>
       </div>
 
-      <div className="mt-2 text-sm text-gray-600">
-        <span>📍 {invitation.location}</span>
-        <span className="ml-4">📅 {invitation.date} at {invitation.time}</span>
+      {/* Action Buttons */}
+      <div className="flex space-x-2">
+        <button
+          onClick={handleAcceptClick}
+          disabled={isAccepting || isDeclining}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            isAccepting
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500'
+          }`}
+        >
+          {isAccepting ? (
+            <div className="flex items-center space-x-1">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Accepting...</span>
+            </div>
+          ) : (
+            'Accept'
+          )}
+        </button>
+        
+        <button
+          onClick={handleDeclineClick}
+          disabled={isAccepting || isDeclining}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            isDeclining
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500'
+          }`}
+        >
+          {isDeclining ? (
+            <div className="flex items-center space-x-1">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Declining...</span>
+            </div>
+          ) : (
+            'Decline'
+          )}
+        </button>
       </div>
     </div>
   );
 };
 
 export default ReceivedInvitationItem;
+

@@ -11,7 +11,7 @@ import {
   where,
   orderBy,
   limit,
-  Timestamp,
+  serverTimestamp,
 } from "firebase/firestore";
 
 // Import utility functions
@@ -72,19 +72,7 @@ const firebaseBaseQuery = () => async (args) => {
       return { data: { id: docRef.id, ...createData } };
     }
 
-    // Handle single document query
-    if (docId) {
-      const docRef = doc(db, collectionName, docId);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        return { data: { id: docSnap.id, ...docSnap.data() } };
-      } else {
-        return { error: { status: 404, data: "Document not found" } };
-      }
-    }
-
-    // Handle collection query
+    // Handle queries (existing logic)
     const collectionRef = collection(db, collectionName);
     let q = collectionRef;
 
@@ -376,8 +364,9 @@ export const apiSlice = createApi({
         docId: invitationId,
         updateData: {
           status: "accepted",
-          acceptedAt: new Date(),
-          updatedAt: new Date(),
+          acceptedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          acceptedBy: currentUserId,
         },
       }),
       invalidatesTags: ["ReceivedInvitation", "SentInvitation", "Match"],
@@ -386,13 +375,13 @@ export const apiSlice = createApi({
         const patchReceived = dispatch(
           apiSlice.util.updateQueryData(
             "getReceivedInvitations",
-            arg.currentUserId,
+            currentUserId,
             (draft) => {
-              const index = draft.findIndex(
+              const invitationIndex = draft.findIndex(
                 (inv) => inv.id === arg.invitationId
               );
-              if (index !== -1) {
-                draft.splice(index, 1); // Remove from pending
+              if (invitationIndex !== -1) {
+                draft.splice(invitationIndex, 1); // Remove from pending
               }
             }
           )
@@ -400,36 +389,43 @@ export const apiSlice = createApi({
 
         try {
           await queryFulfilled;
+          console.log("Invitation accepted successfully");
         } catch (error) {
+          console.error("Failed to accept invitation:", error);
+
           patchReceived.undo();
         }
       },
     }),
 
     // Decline invitation
+    // Add this mutation after acceptInvitation
     declineInvitation: builder.mutation({
       query: ({ invitationId, currentUserId }) => ({
         collection: "invitations",
         docId: invitationId,
         updateData: {
           status: "declined",
-          declinedAt: new Date(),
-          updatedAt: new Date(),
+          declinedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          declinedBy: currentUserId,
         },
       }),
-      invalidatesTags: ["ReceivedInvitation", "SentInvitation"],
+      invalidatesTags: ["ReceivedInvitation", "SentInvitation", "Match"],
       onQueryStarted: async (arg, { dispatch, queryFulfilled }) => {
-        // Similar optimistic update logic
+        const { invitationId, currentUserId } = arg;
+
+        // Optimistic update for received invitations
         const patchReceived = dispatch(
           apiSlice.util.updateQueryData(
             "getReceivedInvitations",
-            arg.currentUserId,
+            currentUserId,
             (draft) => {
-              const index = draft.findIndex(
-                (inv) => inv.id === arg.invitationId
+              const invitationIndex = draft.findIndex(
+                (inv) => inv.id === invitationId
               );
-              if (index !== -1) {
-                draft.splice(index, 1);
+              if (invitationIndex !== -1) {
+                draft.splice(invitationIndex, 1); // Remove from pending list
               }
             }
           )
@@ -437,8 +433,10 @@ export const apiSlice = createApi({
 
         try {
           await queryFulfilled;
+          console.log("Invitation declined successfully");
         } catch (error) {
-          patchReceived.undo();
+          console.error("Failed to decline invitation:", error);
+          patchReceived.undo(); // Rollback optimistic update
         }
       },
     }),
@@ -564,7 +562,6 @@ export const {
   useGetUserMatchesQuery,
   useGetUpcomingMatchesQuery,
   useGetOngoingMatchesQuery,
-  // useGetPendingInvitationsQuery,
   useGetAllUsersQuery,
   useGetUserStatsQuery,
   useGetLeaderboardQuery,
