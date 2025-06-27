@@ -1,0 +1,200 @@
+// PendingInvitationItem.scss
+// Styles for individual pending invitation items
+
+.pending-invitation-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0;
+  
+  // Header with sender info and timing
+  .invitation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    
+    .sender-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+      
+      .sender-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid var(--border-color, #e5e7eb);
+        flex-shrink: 0;
+      }
+      
+      .sender-details {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0; // Allow text truncation
+        
+        .sender-name {
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: var(--text-primary, #1f2937);
+          margin: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        .invitation-time {
+          font-size: 0.75rem;
+          color: var(--text-secondary, #6b7280);
+        }
+      }
+    }
+    
+    .match-timing {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      
+      .scheduled-date {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--primary-color, #3b82f6);
+        background: var(--primary-bg, #eff6ff);
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        white-space: nowrap;
+      }
+    }
+  }
+  
+  // Invitation details section
+  .invitation-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    
+    .invitation-message {
+      font-size: 0.875rem;
+      color: var(--text-primary, #1f2937);
+      font-style: italic;
+      margin: 0;
+      padding: 0.5rem;
+      background: var(--bg-secondary, #f9fafb);
+      border-radius: 0.375rem;
+      border-left: 3px solid var(--primary-color, #3b82f6);
+    }
+    
+    .match-info {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      
+      .match-location,
+      .match-schedule {
+        font-size: 0.75rem;
+        color: var(--text-secondary, #6b7280);
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+    }
+  }
+  
+  // Action buttons section
+  .invitation-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-top: 0.25rem;
+    
+    .decline-btn {
+      border-color: var(--error-color, #ef4444);
+      color: var(--error-color, #ef4444);
+      
+      &:hover:not(:disabled) {
+        background: var(--error-color, #ef4444);
+        color: white;
+      }
+      
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+    
+    .accept-btn {
+      background: var(--success-color, #10b981);
+      border-color: var(--success-color, #10b981);
+      color: white;
+      
+      &:hover:not(:disabled) {
+        background: var(--success-hover, #059669);
+        border-color: var(--success-hover, #059669);
+      }
+      
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+    
+    // Loading spinner styles
+    .loading-spinner {
+      margin-right: 0.25rem;
+    }
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 640px) {
+  .pending-invitation-item {
+    .invitation-header {
+      flex-direction: column;
+      gap: 0.5rem;
+      
+      .match-timing {
+        align-self: flex-start;
+      }
+    }
+    
+    .invitation-actions {
+      justify-content: stretch;
+      
+      .decline-btn,
+      .accept-btn {
+        flex: 1;
+      }
+    }
+  }
+}
+
+// Hover effects for better interactivity
+.pending-invitation-item {
+  transition: all 0.2s ease-in-out;
+  
+  &:hover {
+    .sender-avatar {
+      transform: scale(1.05);
+      transition: transform 0.2s ease-in-out;
+    }
+  }
+}
+
+// Animation for loading states
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pending-invitation-item {
+  &.loading {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+

@@ -23,6 +23,9 @@ import { collection, getDocs } from "firebase/firestore";
 // Import the new Recent Matches Card component
 import RecentMatchesCard from "../../components/dashboard/RecentMatchesCard";
 
+// Import Pending Invitations Card
+import PendingInvitationsCard from "../../components/dashboard/PendingInvitationsCard";
+
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -356,12 +359,16 @@ const Dashboard = () => {
             {/* Second Row - Additional Cards */}
             <Row className="g-4">
               {/* Ongoing Matches */}
-              <Col lg={6}>
+              <Col lg={4}>
                 <OngoingMatches />
               </Col>
 
+              <Col lg={4}>
+                <PendingInvitationsCard />
+              </Col>
+
               {/* Placeholder for other cards */}
-              <Col lg={6}>
+              <Col lg={4}>
                 <Card className="h-100">
                   <Card.Header>
                     <h5 className="mb-0">Coming Soon</h5>

@@ -321,3 +321,47 @@ export const getNotificationSummary = (notifications) => {
   
   return summary;
 };
+
+/**
+ * Generate unique invitation ID
+ */
+export const generateInvitationId = () => {
+  return `inv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+/**
+ * Create audit entry for score updates
+ */
+export const createScoreAuditEntry = (matchId, userId, oldScore, newScore, validation) => {
+  return {
+    id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    matchId,
+    userId,
+    action: "score_update",
+    oldScore,
+    newScore,
+    validation,
+    timestamp: new Date(),
+    userAgent: navigator?.userAgent || 'unknown',
+    ip: 'client-side' // Server would add real IP
+  };
+};
+
+/**
+ * Store audit entry (placeholder for now)
+ */
+export const storeAuditEntry = async (entry) => {
+  try {
+    // For now, just log it. You can implement Firebase storage later
+    console.log('Audit entry stored:', entry);
+    
+    // TODO: Implement actual storage to Firebase 'audit_logs' collection
+    // const docRef = await addDoc(collection(db, 'audit_logs'), entry);
+    // return docRef.id;
+    
+    return Promise.resolve(entry.id);
+  } catch (error) {
+    console.error('Failed to store audit entry:', error);
+    throw error;
+  }
+};
