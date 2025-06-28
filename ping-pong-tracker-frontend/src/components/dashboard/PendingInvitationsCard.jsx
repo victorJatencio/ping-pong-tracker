@@ -1,233 +1,125 @@
-import React, { useState, useEffect } from "react";
-import { useAuth } from "../../hooks/useAuth";
+import React, { useState, useEffect, useContext } from "react";
+import { AuthContext } from "../../contexts/AuthContext";
 import {
-  useGetSentInvitationsQuery,
-  useGetReceivedInvitationsQuery,
+  useGetPendingInvitationsQuery,
   useGetAllUsersQuery,
   useAcceptInvitationMutation,
   useDeclineInvitationMutation,
 } from "../../store/slices/apiSlice";
 import DashboardCard from "../common/Card";
-import SentInvitationItem from "./SentInvitationItem";
-import ReceivedInvitationItem from "./ReceivedInvitationItem";
+import ReceivedInvitationItem from "../dashboard/ReceivedInvitationItem";
+// import { Alert } from "../../../shared/Alert";
 
 const PendingInvitationsCard = () => {
-  const { currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState("received"); // 'received' or 'sent'
-  const [error, setError] = useState(null); // Step 8: Error state
-  const [successMessage, setSuccessMessage] = useState(null); // Step 8: Success state
+  const { currentUser } = useContext(AuthContext);
+  const [enrichedInvitations, setEnrichedInvitations] = useState([]);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
 
-  // Fetch sent invitations (where user is sender)
   const {
-    data: sentInvitations,
-    error: sentError,
-    isLoading: sentLoading,
-  } = useGetSentInvitationsQuery(currentUser?.uid, {
+    data: invitationsData,
+    isLoading: invitationsLoading,
+    error: invitationsError,
+  } = useGetPendingInvitationsQuery(currentUser?.uid, {
     skip: !currentUser?.uid,
-    pollingInterval: 30000,
   });
 
-  // Fetch received invitations (where user is recipient)
-  const {
-    data: receivedInvitations,
-    error: receivedError,
-    isLoading: receivedLoading,
-  } = useGetReceivedInvitationsQuery(currentUser?.uid, {
-    skip: !currentUser?.uid,
-    pollingInterval: 30000,
-  });
+  const { data: usersData, isLoading: usersLoading } = useGetAllUsersQuery();
 
-  // Fetch all users for enrichment
-  const { data: usersData } = useGetAllUsersQuery();
-
-  // Mutation hooks for accept/decline actions
   const [acceptInvitation, { isLoading: isAccepting }] = useAcceptInvitationMutation();
   const [declineInvitation, { isLoading: isDeclining }] = useDeclineInvitationMutation();
 
-  const isLoading = sentLoading || receivedLoading;
-  const hasError = sentError || receivedError;
-
-  // Get counts for tab display
-  const receivedCount = receivedInvitations?.length || 0;
-  const sentCount =
-    sentInvitations?.filter((inv) => inv.status === "pending").length || 0;
-
-  // Step 8: Auto-clear messages after 5 seconds
   useEffect(() => {
-    if (error || successMessage) {
-      const timer = setTimeout(() => {
-        setError(null);
-        setSuccessMessage(null);
-      }, 5000);
-      return () => clearTimeout(timer);
+    if (invitationsData && usersData) {
+      const enriched = invitationsData.map((invitation) => {
+        const sender = usersData[invitation.senderId];
+        return {
+          ...invitation,
+          sender: sender || {
+            uid: invitation.senderId,
+            displayName: "Unknown User",
+            profileImageUrl: `https://i.pravatar.cc/150?u=${invitation.senderId}`,
+          },
+        };
+      } );
+      setEnrichedInvitations(enriched);
     }
-  }, [error, successMessage]);
+  }, [invitationsData, usersData]);
 
-  // Updated handleAccept with proper error handling
+  const clearMessages = () => {
+    setError(null);
+    setSuccessMessage(null);
+  };
+
   const handleAccept = async (invitationId) => {
+    clearMessages();
+    console.log(`Accepting invitation: ${invitationId}`); // Debug log
+    if (!invitationId) {
+        setError("Cannot accept: Invitation ID is missing.");
+        return;
+    }
     try {
-      setError(null); // Clear previous errors
-      setSuccessMessage(null); // Clear previous success messages
-      
-      await acceptInvitation({
-        invitationId,
-        currentUserId: currentUser.uid,
-      }).unwrap();
-
-      // Step 8: Show success message
-      setSuccessMessage("Invitation accepted successfully!");
-      console.log("Invitation accepted successfully");
-    } catch (error) {
-      console.error("Failed to accept invitation:", error);
-      // Step 8: Show user-friendly error message
+      await acceptInvitation({ invitationId, currentUserId: currentUser?.uid }).unwrap();
+      setSuccessMessage("Invitation accepted!");
+    } catch (err) {
       setError("Failed to accept invitation. Please try again.");
+      console.error("Accept Invitation Error:", err);
     }
   };
 
-  // Updated handleDecline with proper error handling
   const handleDecline = async (invitationId) => {
+    clearMessages();
+    console.log(`Declining invitation: ${invitationId}`); // Debug log
+    if (!invitationId) {
+        setError("Cannot decline: Invitation ID is missing.");
+        return;
+    }
     try {
-      setError(null); // Clear previous errors
-      setSuccessMessage(null); // Clear previous success messages
-      
-      await declineInvitation({
-        invitationId,
-        currentUserId: currentUser.uid,
-      }).unwrap();
-
-      // Step 8: Show success message
-      setSuccessMessage("Invitation declined successfully!");
-      console.log("Invitation declined successfully");
-    } catch (error) {
-      console.error("Failed to decline invitation:", error);
-      // Step 8: Show user-friendly error message
+      await declineInvitation({ invitationId, currentUserId: currentUser?.uid }).unwrap();
+      setSuccessMessage("Invitation declined.");
+    } catch (err) {
       setError("Failed to decline invitation. Please try again.");
+      console.error("Decline Invitation Error:", err);
     }
   };
+
+  const isLoading = invitationsLoading || usersLoading;
 
   if (isLoading) {
-    return <DashboardCard title="Pending Invitations" isLoading={true} />;
+    return <DashboardCard title="Pending Invitations">Loading...</DashboardCard>;
   }
-
-  if (hasError) {
-    return (
-      <DashboardCard
-        title="Pending Invitations"
-        footerAction={
-          <button className="btn btn-primary btn-sm">View All Matches</button>
-        }
-      >
-        <div className="text-center py-8">
-          <p className="text-red-600">Error loading invitations</p>
-        </div>
-      </DashboardCard>
-    );
-  }
-
-  const currentInvitations =
-    activeTab === "received" ? receivedInvitations : sentInvitations;
-  const isEmpty = !currentInvitations || currentInvitations.length === 0;
 
   return (
     <DashboardCard
       title="Pending Invitations"
       footerAction={
-        <button className="btn btn-primary btn-sm">View All Matches</button>
+        <button className="btn btn-primary btn-sm">View All</button>
       }
     >
-      {/* Step 8: Error and Success Messages */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-          <div className="flex justify-between items-center">
-            <span>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="text-red-500 hover:text-red-700 font-bold"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+      {error && <div type="error" message={error} onClose={() => setError(null)} />}
+      {successMessage && <div type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
 
-      {successMessage && (
-        <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
-          <div className="flex justify-between items-center">
-            <span>{successMessage}</span>
-            <button
-              onClick={() => setSuccessMessage(null)}
-              className="text-green-500 hover:text-green-700 font-bold"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Tab Navigation */}
-      <div className="flex border-b mb-4">
-        <button
-          onClick={() => setActiveTab("received")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 ${
-            activeTab === "received"
-              ? "border-blue-500 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Received ({receivedCount})
-        </button>
-        <button
-          onClick={() => setActiveTab("sent")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 ${
-            activeTab === "sent"
-              ? "border-blue-500 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Sent ({sentCount})
-        </button>
-      </div>
-
-      {/* Content */}
-      {isEmpty ? (
+      {enrichedInvitations.length > 0 ? (
+        <ul className="divide-y divide-gray-200">
+          {enrichedInvitations.map((invitation) => (
+            <ReceivedInvitationItem
+              key={invitation.id}
+              invitation={invitation}
+              onAccept={() => handleAccept(invitation.id)}
+              onDecline={() => handleDecline(invitation.id)}
+              isAccepting={isAccepting}
+              isDeclining={isDeclining}
+            />
+          ))}
+        </ul>
+      ) : (
         <div className="text-center py-8">
           <p className="text-lg font-semibold text-gray-600">
-            No {activeTab} invitations
+            No Pending Invitations
           </p>
           <p className="text-sm text-gray-500 mt-2">
-            {activeTab === "received"
-              ? "You don't have any pending match invitations at the moment."
-              : "You haven't sent any invitations recently."}
+            You don't have any pending match invitations at the moment.
           </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {currentInvitations.map((invitation) => {
-            if (activeTab === "received") {
-              const sender = usersData?.[invitation.senderId];
-              return (
-                <ReceivedInvitationItem
-                  key={invitation.id}
-                  invitation={invitation}
-                  sender={sender}
-                  currentUserId={currentUser?.uid}
-                  onAccept={handleAccept}
-                  onDecline={handleDecline}
-                  isAccepting={isAccepting}
-                  isDeclining={isDeclining}
-                />
-              );
-            } else {
-              const recipient = usersData?.[invitation.recipientId];
-              return (
-                <SentInvitationItem
-                  key={invitation.id}
-                  invitation={invitation}
-                  recipient={recipient}
-                />
-              );
-            }
-          })}
         </div>
       )}
     </DashboardCard>
@@ -235,4 +127,3 @@ const PendingInvitationsCard = () => {
 };
 
 export default PendingInvitationsCard;
-

@@ -17,20 +17,23 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: {
         ignoredActions: [
-          'persist/PERSIST',
-          'persist/REHYDRATE',
+          "persist/PERSIST",
+          "persist/REHYDRATE",
           "api/executeQuery/pending",
           "api/executeQuery/fulfilled",
           "api/executeQuery/rejected",
-          // "api/executeMutation/pending",
-          // "api/executeMutation/fulfilled",
-          // "api/executeMutation/rejected",
+          "api/executeMutation/fulfilled",
         ],
         ignoredPaths: [
           "api.queries",
           "api.mutations",
           "api.provided",
           "api.subscriptions",
+          "payload.createdAt",
+          "payload.updatedAt",
+          "payload.acceptedAt",
+          "payload.declinedAt",
+          "payload.scheduledDate",
         ],
         ignoredActionPaths: [
           "payload.createdAt",

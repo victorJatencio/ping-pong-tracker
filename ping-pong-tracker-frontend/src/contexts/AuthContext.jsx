@@ -1,15 +1,17 @@
 // src/contexts/AuthContext.jsx
-import React, { createContext, useState, useEffect, useRef } from 'react';
-import { 
-  createUserWithEmailAndPassword, 
+import React, { createContext, useState, useEffect, useRef } from "react";
+import {
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   updateProfile,
-  sendPasswordResetEmail
-} from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+  sendPasswordResetEmail,
+} from "firebase/auth";
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../config/firebase";
+import { useDispatch } from "react-redux";
+import { apiSlice } from "../store/slices/apiSlice";
 
 // Create the context
 export const AuthContext = createContext();
@@ -18,10 +20,11 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+  const dispatch = useDispatch();
+
   // Add this ref to track mounted state
   const isMounted = useRef(true);
-  
+
   // Set isMounted to false when component unmounts
   useEffect(() => {
     return () => {
@@ -34,29 +37,36 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log("AuthContext: Starting registration for:", email);
       if (isMounted.current) setError(null);
-      
+
       // Create user in Firebase Authentication
       console.log("AuthContext: Creating user in Firebase Auth...");
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      console.log("AuthContext: User created successfully:", userCredential.user.uid);
-      
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      console.log(
+        "AuthContext: User created successfully:",
+        userCredential.user.uid
+      );
+
       // Update user profile with name
       console.log("AuthContext: Updating user profile...");
       await updateProfile(userCredential.user, {
-        displayName: name
+        displayName: name,
       });
       console.log("AuthContext: Profile updated successfully");
-      
+
       // Create user document in Firestore
       console.log("AuthContext: Creating user document in Firestore...");
       await setDoc(doc(db, "users", userCredential.user.uid), {
         name,
         email,
         useDefaultAvatar: true, // Default avatar setting
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
       });
       console.log("AuthContext: User document created successfully");
-      
+
       return userCredential.user;
     } catch (error) {
       console.error("AuthContext: Registration failed:", error);
@@ -64,49 +74,58 @@ export const AuthProvider = ({ children }) => {
       throw error;
     }
   };
-  
+
   // Login existing user
   const login = async (email, password) => {
     try {
       console.log("AuthContext: Starting login for:", email);
       if (isMounted.current) setError(null);
-      
-      console.log("AuthContext: Calling signInWithEmailAndPassword...");
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log("AuthContext: Login successful, user:", userCredential.user.uid);
-      console.log("AuthContext: User email verified:", userCredential.user.emailVerified);
+
+      // Sign in with Firebase Authentication
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      console.log(
+        "AuthContext: User logged in successfully:",
+        userCredential.user.uid
+      );
 
       return userCredential.user;
     } catch (error) {
       console.error("AuthContext: Login failed:", error);
-      console.error("AuthContext: Error code:", error.code);
-      console.error("AuthContext: Error message:", error.message);
       if (isMounted.current) setError(error.message);
       throw error;
     }
   };
-  
-  // Logout user
+
+  // Login existing user
   const logout = async () => {
     try {
-      console.log("AuthContext: Starting logout...");
-      if (isMounted.current) setError(null);
-      
+      // Clear all RTK Query cache and subscriptions BEFORE logout
+      dispatch(apiSlice.util.resetApiState());
+
+      // Then sign out
       await signOut(auth);
-      console.log("AuthContext: Logout successful");
+
+      console.log(
+        "[" + new Date().toISOString() + "] User signed out successfully"
+      );
     } catch (error) {
-      console.error("AuthContext: Logout failed:", error);
-      if (isMounted.current) setError(error.message);
-      throw error;
+      console.error(
+        "[" + new Date().toISOString() + "] Error signing out:",
+        error
+      );
     }
   };
-  
+
   // Reset password
   const resetPassword = async (email) => {
     try {
       console.log("AuthContext: Starting password reset for:", email);
       if (isMounted.current) setError(null);
-      
+
       await sendPasswordResetEmail(auth, email);
       console.log("AuthContext: Password reset email sent");
     } catch (error) {
@@ -115,31 +134,35 @@ export const AuthProvider = ({ children }) => {
       throw error;
     }
   };
-  
+
   // Update user profile
   const updateUserProfile = async (profileData) => {
     try {
       console.log("AuthContext: Starting profile update...");
       if (isMounted.current) setError(null);
-      
+
       if (!currentUser) {
-        throw new Error('No authenticated user');
+        throw new Error("No authenticated user");
       }
-      
+
       await updateProfile(currentUser, profileData);
-      
+
       // Update user document in Firestore if needed
       if (profileData.displayName) {
-        await setDoc(doc(db, "users", currentUser.uid), {
-          name: profileData.displayName
-        }, { merge: true });
+        await setDoc(
+          doc(db, "users", currentUser.uid),
+          {
+            name: profileData.displayName,
+          },
+          { merge: true }
+        );
       }
-      
+
       // Force refresh of user data
       if (isMounted.current) {
         setCurrentUser({ ...currentUser });
       }
-      
+
       console.log("AuthContext: Profile update successful");
       return true;
     } catch (error) {
@@ -148,21 +171,26 @@ export const AuthProvider = ({ children }) => {
       throw error;
     }
   };
-  
+
   // Listen for auth state changes
   useEffect(() => {
     console.log("AuthContext: Setting up auth state listener...");
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log("AuthContext: Auth state changed, user:", user ? user.uid : 'null');
+      console.log(
+        "AuthContext: Auth state changed, user:",
+        user ? user.uid : "null"
+      );
 
       if (!isMounted.current) {
-        console.log("AuthContext: Component unmounted, skipping state update"); 
+        console.log("AuthContext: Component unmounted, skipping state update");
         return;
       } // Skip if component unmounted
-      
+
       if (user) {
-        console.log("AuthContext: User is authenticated, fetching additional data...");
+        console.log(
+          "AuthContext: User is authenticated, fetching additional data..."
+        );
         // Get additional user data from Firestore if needed
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
@@ -172,10 +200,12 @@ export const AuthProvider = ({ children }) => {
             // Combine auth user with Firestore data
             setCurrentUser({
               ...user,
-              ...userDoc.data()
+              ...userDoc.data(),
             });
           } else if (isMounted.current) {
-            console.log("AuthContext: No user document found, using auth data only");
+            console.log(
+              "AuthContext: No user document found, using auth data only"
+            );
             setCurrentUser(user);
           }
         } catch (error) {
@@ -187,26 +217,29 @@ export const AuthProvider = ({ children }) => {
         console.log("AuthContext: User is not authenticated");
         if (isMounted.current) setCurrentUser(null);
       }
-      
+
       if (isMounted.current) {
         console.log("AuthContext: Setting loading to false");
-        setLoading(false)
-      };
+        setLoading(false);
+      }
     });
-    
+
     // Cleanup subscription
     return () => {
       console.log("AuthContext: Cleaning up auth state listener");
       unsubscribe();
-    } ;
+    };
   }, []);
 
   // Log current user state changes
   useEffect(() => {
-    console.log("AuthContext: Current user state:", currentUser ? currentUser.uid : 'null');
+    console.log(
+      "AuthContext: Current user state:",
+      currentUser ? currentUser.uid : "null"
+    );
     console.log("AuthContext: Loading state:", loading);
   }, [currentUser, loading]);
-  
+
   // Context value
   const value = {
     currentUser,
@@ -216,9 +249,9 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     resetPassword,
-    updateUserProfile
+    updateUserProfile,
   };
-  
+
   return (
     <AuthContext.Provider value={value}>
       {!loading && children}

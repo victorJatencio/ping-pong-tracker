@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
-  useGetAllRecentMatchesQuery,
+  useGetRecentMatchesQuery,
   useGetAllUsersQuery,
 } from "../../store/slices/apiSlice";
 import DashboardCard from "../common/Card";
@@ -22,7 +22,7 @@ const RecentMatchesCard = () => {
     data: allMatches = [],
     isLoading: matchesLoading,
     error: matchesError,
-  } = useGetAllRecentMatchesQuery();
+  } = useGetRecentMatchesQuery();
 
   const {
     data: usersMap = {},
