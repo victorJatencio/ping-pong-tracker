@@ -1,3 +1,5 @@
+// /src/store/slices/apiSlice.js
+
 import { createApi } from "@reduxjs/toolkit/query/react";
 import {
   getDocs,
@@ -11,13 +13,18 @@ import {
   limit,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "../../config/firebase/";
+import { db } from "../../config/firebase"; // Ensure this path is correct
 
 // Firebase-based base query function with direct Firebase calls
 const firebaseBaseQuery = () => async (args) => {
   try {
+    console.log("firebaseBaseQuery received args:", args); // Log 1: What firebaseBaseQuery receives
+
     // Handle query with constraints
     if (args.collection && args.queryConstraints) {
+      console.log("firebaseBaseQuery: Handling query with constraints.");
+      console.log("  Collection:", args.collection);
+      console.log("  Query Constraints:", args.queryConstraints); // Log 2: The exact query constraints being used
       const q = query(
         collection(db, args.collection),
         ...args.queryConstraints
@@ -32,6 +39,8 @@ const firebaseBaseQuery = () => async (args) => {
 
     // Handle simple collection query (no constraints)
     if (args.collection && !args.queryConstraints && !args.docId) {
+      console.log("firebaseBaseQuery: Handling simple collection query.");
+      console.log("  Collection:", args.collection);
       const querySnapshot = await getDocs(collection(db, args.collection));
       const documents = querySnapshot.docs.map((doc) => ({
         id: doc.id,
@@ -42,6 +51,8 @@ const firebaseBaseQuery = () => async (args) => {
 
     // Handle update operation
     if (args.collection && args.docId && args.data) {
+      console.log("firebaseBaseQuery: Handling update operation.");
+      console.log("  Collection:", args.collection, "DocId:", args.docId, "Data:", args.data);
       const docRef = doc(db, args.collection, args.docId);
       await updateDoc(docRef, args.data);
       return { data: { success: true, docId: args.docId } };
@@ -49,6 +60,8 @@ const firebaseBaseQuery = () => async (args) => {
 
     // Handle create operation
     if (args.collection && args.createData) {
+      console.log("firebaseBaseQuery: Handling create operation.");
+      console.log("  Collection:", args.collection, "CreateData:", args.createData);
       const docRef = await addDoc(
         collection(db, args.collection),
         args.createData
@@ -97,14 +110,24 @@ export const apiSlice = createApi({
       providesTags: ["Match"],
     }),
     getPendingInvitations: builder.query({
-      query: (userId) => ({
-        collection: "invitations",
-        queryConstraints: [
-          where("recipientId", "==", userId),
-          where("status", "==", "pending"),
-          orderBy("createdAt", "desc"),
-        ],
-      }),
+      query: (userId) => {
+        console.log("getPendingInvitations query function received userId:", userId, " (Type:", typeof userId, ")"); // Log 3: What the query function receives
+        // Explicitly check for undefined, null, or empty string
+        if (userId === undefined || userId === null || userId === "") {
+          console.warn("getPendingInvitations: userId is invalid (undefined, null, or empty string), returning empty data.");
+          return { data: [] };
+        }
+        const queryObj = {
+          collection: "invitations",
+          queryConstraints: [
+            where("recipientId", "==", userId),
+            where("status", "==", "pending"),
+            orderBy("createdAt", "desc"),
+          ],
+        };
+        console.log("getPendingInvitations returning query object:", queryObj); // Log 4: The exact query object being returned
+        return queryObj;
+      },
       providesTags: (result) =>
         result
           ? [
@@ -112,6 +135,16 @@ export const apiSlice = createApi({
               { type: "Invitation", id: "LIST" },
             ]
           : [{ type: "Invitation", id: "LIST" }],
+      // Transform Firebase Timestamps to JS Date objects
+      transformResponse: (response) => {
+        return response.map((invitation) => ({
+          ...invitation,
+          createdAt: invitation.createdAt?.toDate ? invitation.createdAt.toDate() : invitation.createdAt,
+          scheduledDate: invitation.scheduledDate?.toDate ? invitation.scheduledDate.toDate() : invitation.scheduledDate,
+          // Add other timestamp fields if they exist
+          updatedAt: invitation.updatedAt?.toDate ? invitation.updatedAt.toDate() : invitation.updatedAt,
+        }));
+      },
     }),
     getPlayerStats: builder.query({
         query: (userId) => ({

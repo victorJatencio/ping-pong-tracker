@@ -16,6 +16,11 @@ const PendingInvitationsCard = () => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
+   // Log currentUser.uid when the component renders
+  useEffect(() => {
+    console.log("PendingInvitationsCard: currentUser.uid:", currentUser?.uid);
+  }, [currentUser]);
+
   const {
     data: invitationsData,
     isLoading: invitationsLoading,
