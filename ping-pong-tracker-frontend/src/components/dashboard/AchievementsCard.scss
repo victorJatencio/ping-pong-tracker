@@ -1,0 +1,195 @@
+// AchievementsCard.scss
+// Styling for the Achievements card component following Bootstrap and project patterns
+
+.achievements-card {
+  // Main grid layout for achievement items
+  .achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+
+    @media (max-width: 576px) {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+  }
+
+  // Individual achievement item styling
+  .achievement-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    background: rgba(var(--bs-primary-rgb), 0.05);
+    border-radius: 0.5rem;
+    border: 1px solid rgba(var(--bs-primary-rgb), 0.1);
+    transition: all 0.2s ease-in-out;
+
+    &:hover {
+      background: rgba(var(--bs-primary-rgb), 0.1);
+      border-color: rgba(var(--bs-primary-rgb), 0.2);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    @media (max-width: 576px) {
+      padding: 1rem;
+      justify-content: center;
+      text-align: center;
+    }
+  }
+
+  // Achievement icon styling
+  .achievement-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    margin-right: 0.75rem;
+    font-size: 1.25rem;
+
+    @media (max-width: 576px) {
+      margin-right: 0;
+      margin-bottom: 0.5rem;
+      width: 3rem;
+      height: 3rem;
+      font-size: 1.5rem;
+    }
+
+    // Icon color variants
+    &.trophy {
+      background: linear-gradient(135deg, #ffd700, #ffed4e);
+      color: #b8860b;
+    }
+
+    &.streak {
+      background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+      color: #d63031;
+    }
+
+    &.games {
+      background: linear-gradient(135deg, #74b9ff, #a8d8ff);
+      color: #0984e3;
+    }
+  }
+
+  // Achievement content (number and label)
+  .achievement-content {
+    flex: 1;
+    min-width: 0; // Prevent flex item from overflowing
+
+    @media (max-width: 576px) {
+      text-align: center;
+    }
+  }
+
+  // Achievement number styling
+  .achievement-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--bs-dark);
+    line-height: 1.2;
+
+    @media (max-width: 576px) {
+      font-size: 1.75rem;
+    }
+  }
+
+  // Achievement label styling
+  .achievement-label {
+    font-size: 0.875rem;
+    color: var(--bs-secondary);
+    font-weight: 500;
+    margin-top: 0.125rem;
+
+    @media (max-width: 576px) {
+      font-size: 0.9rem;
+    }
+  }
+
+  // Achievement badges section
+  .achievement-badges {
+    border-top: 1px solid var(--bs-border-color);
+    padding-top: 1rem;
+
+    .badge-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--bs-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .badges-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+
+      .badge {
+        font-size: 0.75rem;
+        font-weight: 500;
+        padding: 0.375rem 0.5rem;
+        border-radius: 0.375rem;
+        display: inline-flex;
+        align-items: center;
+
+        i {
+          font-size: 0.7rem;
+        }
+      }
+    }
+  }
+
+  // Loading and empty states
+  .text-center {
+    .bi {
+      opacity: 0.5;
+    }
+  }
+
+  // Dark mode support
+  @media (prefers-color-scheme: dark) {
+    .achievement-item {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+    }
+
+    .achievement-number {
+      color: var(--bs-light);
+    }
+  }
+
+  // Animation for achievement numbers (optional enhancement)
+  .achievement-number {
+    transition: transform 0.2s ease-in-out;
+  }
+
+  .achievement-item:hover .achievement-number {
+    transform: scale(1.05);
+  }
+
+  // Responsive adjustments for very small screens
+  @media (max-width: 320px) {
+    .achievements-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .achievement-item {
+      flex-direction: column;
+      text-align: center;
+      padding: 1rem 0.5rem;
+    }
+
+    .achievement-icon {
+      margin-right: 0;
+      margin-bottom: 0.5rem;
+    }
+  }
+}
+

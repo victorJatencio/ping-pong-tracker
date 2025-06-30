@@ -22,9 +22,10 @@ import { collection, getDocs } from "firebase/firestore";
 
 // Import the new Recent Matches Card component
 import RecentMatchesCard from "../../components/dashboard/RecentMatchesCard";
-
 // Import Pending Invitations Card
 import PendingInvitationsCard from '../../components/dashboard/PendingInvitationsCard';
+// Import Achievements Card
+import AchievementsCard from "../../components/dashboard/AchievementsCard";
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -320,39 +321,8 @@ const Dashboard = () => {
 
               {/* Achievements Card */}
               <Col lg={4}>
-                <Card className="text-center h-100">
-                  <Card.Header>
-                    <h5 className="mb-0">Achievements</h5>
-                  </Card.Header>
-                  <Card.Body>
-                    <Row className="g-3">
-                      {mockAchievements.slice(0, 3).map((achievement) => (
-                        <Col key={achievement.id} xs={4}>
-                          <div className="achievement-item">
-                            <div
-                              className={`achievement-icon ${
-                                achievement.unlocked ? "unlocked" : "locked"
-                              }`}
-                            >
-                              <span style={{ fontSize: "2rem" }}>
-                                {achievement.unlocked ? achievement.icon : "🔒"}
-                              </span>
-                            </div>
-                            <small className="d-block mt-2 text-muted">
-                              {achievement.name}
-                            </small>
-                          </div>
-                        </Col>
-                      ))}
-                    </Row>
-                  </Card.Body>
-                  <Card.Footer>
-                    <Link to="/history" className="text-decoration-none">
-                      View all Achievements{" "}
-                      <i className="bi bi-arrow-right"></i>
-                    </Link>
-                  </Card.Footer>
-                </Card>
+                <AchievementsCard playerStats={userStats} isLoading={loading} />
+
               </Col>
             </Row>
 
