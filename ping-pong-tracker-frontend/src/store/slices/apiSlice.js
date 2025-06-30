@@ -1,5 +1,3 @@
-// /src/store/slices/apiSlice.js
-
 import { createApi } from "@reduxjs/toolkit/query/react";
 import {
   getDocs,
@@ -13,18 +11,11 @@ import {
   limit,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "../../config/firebase"; // Ensure this path is correct
+import { db } from "../../config/firebase";
 
-// Firebase-based base query function with direct Firebase calls
 const firebaseBaseQuery = () => async (args) => {
   try {
-    console.log("firebaseBaseQuery received args:", args); // Log 1: What firebaseBaseQuery receives
-
-    // Handle query with constraints
     if (args.collection && args.queryConstraints) {
-      console.log("firebaseBaseQuery: Handling query with constraints.");
-      console.log("  Collection:", args.collection);
-      console.log("  Query Constraints:", args.queryConstraints); // Log 2: The exact query constraints being used
       const q = query(
         collection(db, args.collection),
         ...args.queryConstraints
@@ -37,10 +28,7 @@ const firebaseBaseQuery = () => async (args) => {
       return { data: documents };
     }
 
-    // Handle simple collection query (no constraints)
     if (args.collection && !args.queryConstraints && !args.docId) {
-      console.log("firebaseBaseQuery: Handling simple collection query.");
-      console.log("  Collection:", args.collection);
       const querySnapshot = await getDocs(collection(db, args.collection));
       const documents = querySnapshot.docs.map((doc) => ({
         id: doc.id,
@@ -49,19 +37,13 @@ const firebaseBaseQuery = () => async (args) => {
       return { data: documents };
     }
 
-    // Handle update operation
     if (args.collection && args.docId && args.data) {
-      console.log("firebaseBaseQuery: Handling update operation.");
-      console.log("  Collection:", args.collection, "DocId:", args.docId, "Data:", args.data);
       const docRef = doc(db, args.collection, args.docId);
       await updateDoc(docRef, args.data);
       return { data: { success: true, docId: args.docId } };
     }
 
-    // Handle create operation
     if (args.collection && args.createData) {
-      console.log("firebaseBaseQuery: Handling create operation.");
-      console.log("  Collection:", args.collection, "CreateData:", args.createData);
       const docRef = await addDoc(
         collection(db, args.collection),
         args.createData
@@ -84,49 +66,144 @@ export const apiSlice = createApi({
   baseQuery: firebaseBaseQuery(),
   tagTypes: ["Match", "User", "Invitation", "PlayerStats"],
   endpoints: (builder) => ({
-    // QUERIES
     getAllUsers: builder.query({
       query: () => ({
         collection: "users",
       }),
       providesTags: ["User"],
       transformResponse: (response) => {
+        console.log("🔍 getAllUsers Debug:");
+        console.log("  - Raw response:", response);
+
         const usersMap = response.reduce((acc, user) => {
-          acc[user.uid] = user;
+          // Try different possible ID fields
+          const userId = user.uid || user.id || user.userId;
+          console.log(
+            `  - Processing user: ${user.name || user.email}, ID: ${userId}`
+          );
+
+          if (userId) {
+            acc[userId] = user;
+          } else {
+            console.warn("  - User has no valid ID field:", user);
+          }
           return acc;
         }, {});
+
+        console.log("  - Final usersMap:", usersMap);
         return usersMap;
       },
     }),
+
     getRecentMatches: builder.query({
-      query: (userId) => ({
-        collection: "matches",
-        queryConstraints: [
-          where("players", "array-contains", userId),
-          orderBy("date", "desc"),
-          limit(5),
-        ],
-      }),
+      queryFn: async (userId) => {
+        try {
+          if (!userId) {
+            console.warn(
+              "getRecentMatches: userId is invalid, returning empty array."
+            );
+            return { data: [] };
+          }
+
+          console.log("🔍 getRecentMatches Debug:");
+          console.log("  - Querying for userId:", userId);
+
+          // Query for matches where user is either player1 or player2
+          const q1 = query(
+            collection(db, "matches"),
+            where("player1Id", "==", userId),
+            orderBy("date", "desc"),
+            limit(10)
+          );
+
+          const q2 = query(
+            collection(db, "matches"),
+            where("player2Id", "==", userId),
+            orderBy("date", "desc"),
+            limit(10)
+          );
+
+          // Execute both queries
+          const [snapshot1, snapshot2] = await Promise.all([
+            getDocs(q1),
+            getDocs(q2),
+          ]);
+
+          // Combine results
+          const matches1 = snapshot1.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+
+          const matches2 = snapshot2.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+
+          // Merge and deduplicate matches
+          const allUserMatches = [...matches1, ...matches2];
+          const uniqueMatches = allUserMatches.filter(
+            (match, index, self) =>
+              index === self.findIndex((m) => m.id === match.id)
+          );
+
+          // Sort by date and limit to 5 most recent
+          const sortedMatches = uniqueMatches
+            .sort((a, b) => {
+              const dateA = a.date?.toDate ? a.date.toDate() : new Date(a.date);
+              const dateB = b.date?.toDate ? b.date.toDate() : new Date(b.date);
+              return dateB - dateA; // Most recent first
+            })
+            .slice(0, 5);
+
+          console.log("  - Total user matches found:", uniqueMatches.length);
+          console.log("  - Recent matches (top 5):", sortedMatches.length);
+
+          return { data: sortedMatches };
+        } catch (error) {
+          console.error("getRecentMatches error:", error);
+          return { error: { status: "FIREBASE_ERROR", error: error.message } };
+        }
+      },
       providesTags: ["Match"],
     }),
     getPendingInvitations: builder.query({
-      query: (userId) => {
-        console.log("getPendingInvitations query function received userId:", userId, " (Type:", typeof userId, ")"); // Log 3: What the query function receives
-        // Explicitly check for undefined, null, or empty string
-        if (userId === undefined || userId === null || userId === "") {
-          console.warn("getPendingInvitations: userId is invalid (undefined, null, or empty string), returning empty data.");
-          return { data: [] };
-        }
-        const queryObj = {
-          collection: "invitations",
-          queryConstraints: [
+      queryFn: async (userId) => {
+        try {
+          if (userId === undefined || userId === null || userId === "") {
+            console.warn(
+              "getPendingInvitations: userId is invalid, returning empty array."
+            );
+            return { data: [] };
+          }
+
+          const q = query(
+            collection(db, "invitations"),
             where("recipientId", "==", userId),
             where("status", "==", "pending"),
-            orderBy("createdAt", "desc"),
-          ],
-        };
-        console.log("getPendingInvitations returning query object:", queryObj); // Log 4: The exact query object being returned
-        return queryObj;
+            orderBy("createdAt", "desc")
+          );
+
+          const querySnapshot = await getDocs(q);
+          const documents = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate
+              ? doc.data().createdAt.toDate()
+              : doc.data().createdAt,
+            scheduledDate: doc.data().scheduledDate?.toDate
+              ? doc.data().scheduledDate.toDate()
+              : doc.data().scheduledDate,
+            updatedAt: doc.data().updatedAt?.toDate
+              ? doc.data().updatedAt.toDate()
+              : doc.data().updatedAt,
+          }));
+
+          return { data: documents };
+        } catch (error) {
+          console.error("getPendingInvitations error:", error);
+          return { error: { status: "FIREBASE_ERROR", error: error.message } };
+        }
       },
       providesTags: (result) =>
         result
@@ -135,26 +212,16 @@ export const apiSlice = createApi({
               { type: "Invitation", id: "LIST" },
             ]
           : [{ type: "Invitation", id: "LIST" }],
-      // Transform Firebase Timestamps to JS Date objects
-      transformResponse: (response) => {
-        return response.map((invitation) => ({
-          ...invitation,
-          createdAt: invitation.createdAt?.toDate ? invitation.createdAt.toDate() : invitation.createdAt,
-          scheduledDate: invitation.scheduledDate?.toDate ? invitation.scheduledDate.toDate() : invitation.scheduledDate,
-          // Add other timestamp fields if they exist
-          updatedAt: invitation.updatedAt?.toDate ? invitation.updatedAt.toDate() : invitation.updatedAt,
-        }));
-      },
     }),
     getPlayerStats: builder.query({
-        query: (userId) => ({
-            collection: 'playerStats',
-            queryConstraints: [where('userId', '==', userId)]
-        }),
-        providesTags: (result, error, userId) => [{ type: 'PlayerStats', id: userId }],
+      query: (userId) => ({
+        collection: "playerStats",
+        queryConstraints: [where("userId", "==", userId)],
+      }),
+      providesTags: (result, error, userId) => [
+        { type: "PlayerStats", id: userId },
+      ],
     }),
-
-    // MUTATIONS
     acceptInvitation: builder.mutation({
       query: ({ invitationId }) => ({
         collection: "invitations",
@@ -164,22 +231,26 @@ export const apiSlice = createApi({
           updatedAt: serverTimestamp(),
         },
       }),
-      async onQueryStarted({ invitationId, currentUserId }, { dispatch, queryFulfilled }) {
-        // Optimistically remove the invitation from the pending list
+      async onQueryStarted(
+        { invitationId, currentUserId },
+        { dispatch, queryFulfilled }
+      ) {
         const patchResult = dispatch(
-          apiSlice.util.updateQueryData('getPendingInvitations', currentUserId, (draft) => {
-            const index = draft.findIndex(inv => inv.id === invitationId);
-            if (index !== -1) {
-              draft.splice(index, 1);
+          apiSlice.util.updateQueryData(
+            "getPendingInvitations",
+            currentUserId,
+            (draft) => {
+              const index = draft.findIndex((inv) => inv.id === invitationId);
+              if (index !== -1) {
+                draft.splice(index, 1);
+              }
             }
-          })
+          )
         );
         try {
           await queryFulfilled;
-          // On success, invalidate other tags to refetch data, e.g., matches list
-          dispatch(apiSlice.util.invalidateTags(['Match']));
+          dispatch(apiSlice.util.invalidateTags(["Match"]));
         } catch (error) {
-          // On error, undo the optimistic update
           patchResult.undo();
           console.error("Failed to accept invitation:", error);
         }
@@ -194,20 +265,25 @@ export const apiSlice = createApi({
           updatedAt: serverTimestamp(),
         },
       }),
-      async onQueryStarted({ invitationId, currentUserId }, { dispatch, queryFulfilled }) {
-        // Optimistically remove the invitation from the pending list
+      async onQueryStarted(
+        { invitationId, currentUserId },
+        { dispatch, queryFulfilled }
+      ) {
         const patchResult = dispatch(
-          apiSlice.util.updateQueryData('getPendingInvitations', currentUserId, (draft) => {
-            const index = draft.findIndex(inv => inv.id === invitationId);
-            if (index !== -1) {
-              draft.splice(index, 1);
+          apiSlice.util.updateQueryData(
+            "getPendingInvitations",
+            currentUserId,
+            (draft) => {
+              const index = draft.findIndex((inv) => inv.id === invitationId);
+              if (index !== -1) {
+                draft.splice(index, 1);
+              }
             }
-          })
+          )
         );
         try {
           await queryFulfilled;
         } catch (error) {
-          // On error, undo the optimistic update
           patchResult.undo();
           console.error("Failed to decline invitation:", error);
         }
