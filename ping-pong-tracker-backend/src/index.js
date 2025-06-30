@@ -6,6 +6,7 @@ const { initializeSocket } = require('./config/socket');
 const { initializeRealtime } = require('./utils/realtime');
 const logger = require('./utils/logger');
 
+
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -79,6 +80,7 @@ const gracefulShutdown = (signal) => {
         process.exit(1);
     }, 30000);
 };
+
 
 // Handle process signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
