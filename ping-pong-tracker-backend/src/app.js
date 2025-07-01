@@ -47,12 +47,6 @@ app.get('/health', (req, res) => {
     });
 });
 
-// API routes
-// const matchRoutes = require('./routes/matches');
-// const statsRoutes = require('./routes/stats');
-
-// app.use('/api/matches', matchRoutes);
-// app.use('/api/stats', statsRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -66,6 +60,10 @@ app.get('/', (req, res) => {
         }
     });
 });
+
+// API routes
+const apiRoutes = require('./api/routes');
+app.use('/api', apiRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

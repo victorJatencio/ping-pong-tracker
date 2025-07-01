@@ -1,9 +1,9 @@
 const express = require('express');
-const authRoutes = require('./auth.routes');
-const userRoutes = require('./user.routes');
-const matchRoutes = require('./match.routes');
-const statsRoutes = require('./stats.routes');
-const notificationRoutes = require('./notification.routes');
+// const authRoutes = require('./auth.routes');
+// const userRoutes = require('./user.routes');
+// const matchRoutes = require('./match.routes');
+// const statsRoutes = require('./stats.routes');
+// const notificationRoutes = require('./notification.routes');
 
 const router = express.Router();
 
@@ -37,10 +37,10 @@ router.get('/health', (req, res) => {
 });
 
 // Mount route modules
-router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
-router.use('/matches', matchRoutes);
-router.use('/stats', statsRoutes);
-router.use('/notifications', notificationRoutes);
+// router.use('/auth', authRoutes);
+// router.use('/users', userRoutes);
+// router.use('/matches', matchRoutes);
+// router.use('/stats', statsRoutes);
+// router.use('/notifications', notificationRoutes);
 
 module.exports = router;

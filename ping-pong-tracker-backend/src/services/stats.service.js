@@ -1,36 +1,42 @@
 // ping-pong-tracker-backend/src/services/stats.service.js
 const admin = require('firebase-admin');
 
-
 class StatsService {
+    /**
+     * Helper method to get database instance
+     * Prevents Firebase initialization issues
+     */
+    getDb() {
+        return admin.firestore();
+    }
+
     /**
      * Sync player stats after match completion
      * This is the CRITICAL method that fixes the playerStats sync issue
      * @param {string} playerId - Player ID to sync stats for
      * @returns {Promise<Object>} - Updated player stats
      */
-
-    // Helper method to get database instance
-    getDb() {
-        return admin.firestore();
-    }
-
     async syncPlayerStats(playerId) {
         try {
             const db = this.getDb();
             
-            console.log(`Syncing stats for player: ${playerId}`);
+            console.log(`🔄 Syncing stats for player: ${playerId}`);
             
             // Calculate fresh stats from all completed matches
             const freshStats = await this.calculatePlayerStats(playerId);
             
-            // Update playerStats collection
+            // Update playerStats collection with merge to preserve existing fields
             await db.collection('playerStats').doc(playerId).set(freshStats, { merge: true });
             
-            console.log(`Stats synced successfully for player: ${playerId}`);
+            console.log(`✅ Stats synced successfully for player: ${playerId}`, {
+                totalMatches: freshStats.totalMatches,
+                totalWins: freshStats.totalWins,
+                winRate: freshStats.winRate
+            });
+            
             return freshStats;
         } catch (error) {
-            console.error(`Error syncing stats for player ${playerId}:`, error);
+            console.error(`❌ Error syncing stats for player ${playerId}:`, error);
             throw error;
         }
     }
@@ -42,34 +48,68 @@ class StatsService {
      */
     async calculatePlayerStats(playerId) {
         try {
+            const db = this.getDb();
+            
+            console.log(`📊 Calculating stats for player: ${playerId}`);
+            
             // Fetch all completed matches for this player
             const matchesRef = db.collection('matches');
-            const completedMatches = await matchesRef
+            
+            // Query for matches where player is player1
+            const player1Matches = await matchesRef
+                .where('player1Id', '==', playerId)
                 .where('status', '==', 'completed')
                 .get();
             
-            // Filter matches where this player participated
+            // Query for matches where player is player2
+            const player2Matches = await matchesRef
+                .where('player2Id', '==', playerId)
+                .where('status', '==', 'completed')
+                .get();
+            
+            // Combine all matches
             const playerMatches = [];
-            completedMatches.forEach(doc => {
-                const matchData = doc.data();
-                if (matchData.player1Id === playerId || matchData.player2Id === playerId) {
-                    playerMatches.push({
-                        id: doc.id,
-                        ...matchData
-                    });
-                }
+            
+            player1Matches.forEach(doc => {
+                playerMatches.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
+            });
+            
+            player2Matches.forEach(doc => {
+                playerMatches.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
             });
 
+            console.log(`📈 Found ${playerMatches.length} completed matches for player ${playerId}`);
+
             if (playerMatches.length === 0) {
+                console.log(`🆕 No matches found, returning default stats for player ${playerId}`);
                 return this.getDefaultStats(playerId);
             }
 
             // Calculate basic statistics
             const totalMatches = playerMatches.length;
-            const wins = playerMatches.filter(match => match.winnerId === playerId);
-            const losses = playerMatches.filter(match => match.loserId === playerId);
-            const totalWins = wins.length;
-            const totalLosses = losses.length;
+            let totalWins = 0;
+            let totalLosses = 0;
+
+            // Calculate wins and losses by comparing scores
+            playerMatches.forEach(match => {
+                const isPlayer1 = match.player1Id === playerId;
+                const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
+                const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+                
+                if (playerScore > opponentScore) {
+                    totalWins++;
+                } else if (playerScore < opponentScore) {
+                    totalLosses++;
+                }
+                // Ties are not counted as wins or losses
+            });
+
             const winRate = totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
 
             // Calculate current streak
@@ -83,10 +123,22 @@ class StatsService {
 
             // Calculate recent win rate (last 10 matches)
             const recentMatches = playerMatches
-                .sort((a, b) => b.completedDate?.toDate() - a.completedDate?.toDate())
+                .sort((a, b) => {
+                    const dateA = a.completedDate?.toDate ? a.completedDate.toDate() : new Date(a.completedDate);
+                    const dateB = b.completedDate?.toDate ? b.completedDate.toDate() : new Date(b.completedDate);
+                    return dateB - dateA;
+                })
                 .slice(0, 10);
+            
+            const recentWins = recentMatches.filter(match => {
+                const isPlayer1 = match.player1Id === playerId;
+                const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
+                const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+                return playerScore > opponentScore;
+            }).length;
+            
             const recentWinRate = recentMatches.length > 0 
-                ? Math.round((recentMatches.filter(match => match.winnerId === playerId).length / recentMatches.length) * 100)
+                ? Math.round((recentWins / recentMatches.length) * 100)
                 : winRate;
 
             // Calculate ranking score
@@ -100,7 +152,11 @@ class StatsService {
 
             // Get last match date
             const lastMatchDate = playerMatches.length > 0 
-                ? playerMatches.sort((a, b) => b.completedDate?.toDate() - a.completedDate?.toDate())[0].completedDate
+                ? playerMatches.sort((a, b) => {
+                    const dateA = a.completedDate?.toDate ? a.completedDate.toDate() : new Date(a.completedDate);
+                    const dateB = b.completedDate?.toDate ? b.completedDate.toDate() : new Date(b.completedDate);
+                    return dateB - dateA;
+                })[0].completedDate
                 : null;
 
             const stats = {
@@ -121,17 +177,18 @@ class StatsService {
                 lastUpdated: admin.firestore.FieldValue.serverTimestamp()
             };
 
-            console.log(`Calculated stats for ${playerId}:`, {
+            console.log(`📊 Calculated stats for ${playerId}:`, {
                 totalMatches,
                 totalWins,
                 totalLosses,
                 winRate,
-                currentStreak
+                currentStreak,
+                streakType
             });
 
             return stats;
         } catch (error) {
-            console.error('Error calculating player stats:', error);
+            console.error('❌ Error calculating player stats:', error);
             throw error;
         }
     }
@@ -143,48 +200,34 @@ class StatsService {
      */
     async getPlayerProfileStats(playerId) {
         try {
+            const db = this.getDb();
+            
+            console.log(`📋 Getting profile stats for player: ${playerId}`);
+            
             // Get basic stats from playerStats collection
             const statsDoc = await db.collection('playerStats').doc(playerId).get();
             
             if (!statsDoc.exists) {
-                console.log('No player stats found, calculating initial statistics...');
+                console.log('📊 No player stats found, calculating initial statistics...');
                 return await this.calculatePlayerStats(playerId);
             }
             
             const basicStats = statsDoc.data();
-            
-            // Get detailed match history for profile-specific calculations
-            const matchesRef = db.collection('matches');
-            const completedMatches = await matchesRef
-                .where('status', '==', 'completed')
-                .get();
-            
-            const playerMatches = [];
-            completedMatches.forEach(doc => {
-                const matchData = doc.data();
-                if (matchData.player1Id === playerId || matchData.player2Id === playerId) {
-                    playerMatches.push({
-                        id: doc.id,
-                        ...matchData
-                    });
-                }
+            console.log('📊 Found existing player stats:', {
+                totalMatches: basicStats.totalMatches,
+                totalWins: basicStats.totalWins,
+                winRate: basicStats.winRate
             });
-
-            // Calculate enhanced statistics
-            const profileStats = {
+            
+            // Return basic stats with achievements calculated
+            const achievements = this.calculateAchievements([], playerId, basicStats);
+            
+            return {
                 ...basicStats,
-                performanceTrend: this.calculatePerformanceTrend(playerMatches, playerId, 30),
-                opponentStats: this.calculateOpponentStats(playerMatches, playerId),
-                timeBasedStats: this.calculateTimeBasedStats(playerMatches, playerId),
-                achievements: this.calculateAchievements(playerMatches, playerId, basicStats),
-                detailedRecentForm: this.getDetailedRecentForm(playerMatches, playerId, 10),
-                dayOfWeekStats: this.calculateDayOfWeekStats(playerMatches, playerId),
-                scoreAnalysis: this.calculateScoreAnalysis(playerMatches, playerId)
+                achievements
             };
-
-            return profileStats;
         } catch (error) {
-            console.error('Error getting player profile stats:', error);
+            console.error('❌ Error getting player profile stats:', error);
             throw error;
         }
     }
@@ -201,16 +244,20 @@ class StatsService {
         }
 
         // Sort matches by completion date (most recent first)
-        const sortedMatches = matches.sort((a, b) => 
-            b.completedDate?.toDate() - a.completedDate?.toDate()
-        );
+        const sortedMatches = matches.sort((a, b) => {
+            const dateA = a.completedDate?.toDate ? a.completedDate.toDate() : new Date(a.completedDate);
+            const dateB = b.completedDate?.toDate ? b.completedDate.toDate() : new Date(b.completedDate);
+            return dateB - dateA;
+        });
 
         let currentStreak = 0;
         let streakType = 'none';
-        const mostRecentResult = sortedMatches[0].winnerId === playerId ? 'win' : 'loss';
         
         for (const match of sortedMatches) {
-            const isWin = match.winnerId === playerId;
+            const isPlayer1 = match.player1Id === playerId;
+            const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
+            const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+            const isWin = playerScore > opponentScore;
             
             if (currentStreak === 0) {
                 // First match sets the streak type
@@ -252,14 +299,23 @@ class StatsService {
      * @param {Array} matches - Player's matches
      * @param {string} playerId - Player's UID
      * @param {number} count - Number of recent matches
-     * @returns {Array} - Recent form array
+     * @returns {Array} - Recent form array (true = win, false = loss)
      */
     calculateRecentForm(matches, playerId, count = 5) {
         const recentMatches = matches
-            .sort((a, b) => b.completedDate?.toDate() - a.completedDate?.toDate())
+            .sort((a, b) => {
+                const dateA = a.completedDate?.toDate ? a.completedDate.toDate() : new Date(a.completedDate);
+                const dateB = b.completedDate?.toDate ? b.completedDate.toDate() : new Date(b.completedDate);
+                return dateB - dateA;
+            })
             .slice(0, count);
 
-        return recentMatches.map(match => match.winnerId === playerId);
+        return recentMatches.map(match => {
+            const isPlayer1 = match.player1Id === playerId;
+            const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
+            const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+            return playerScore > opponentScore;
+        });
     }
 
     /**
@@ -299,9 +355,14 @@ class StatsService {
             }
 
             locationStats[location].matches++;
-            if (match.winnerId === playerId) {
+            
+            const isPlayer1 = match.player1Id === playerId;
+            const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
+            const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+            
+            if (playerScore > opponentScore) {
                 locationStats[location].wins++;
-            } else {
+            } else if (playerScore < opponentScore) {
                 locationStats[location].losses++;
             }
 
@@ -323,7 +384,7 @@ class StatsService {
         const monthlyStats = {};
 
         matches.forEach(match => {
-            const date = match.completedDate?.toDate();
+            const date = match.completedDate?.toDate ? match.completedDate.toDate() : new Date(match.completedDate);
             if (!date) return;
 
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -338,9 +399,14 @@ class StatsService {
             }
 
             monthlyStats[monthKey].matches++;
-            if (match.winnerId === playerId) {
+            
+            const isPlayer1 = match.player1Id === playerId;
+            const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
+            const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+            
+            if (playerScore > opponentScore) {
                 monthlyStats[monthKey].wins++;
-            } else {
+            } else if (playerScore < opponentScore) {
                 monthlyStats[monthKey].losses++;
             }
 
@@ -353,8 +419,8 @@ class StatsService {
     }
 
     /**
-     * Calculate achievements
-     * @param {Array} matches - Player's matches
+     * Calculate achievements for Achievements Card
+     * @param {Array} matches - Player's matches (can be empty if using basicStats)
      * @param {string} playerId - Player's UID
      * @param {Object} basicStats - Basic player statistics
      * @returns {Array} - Array of achievements
@@ -363,42 +429,66 @@ class StatsService {
         const achievements = [];
         
         // Win-based achievements
-        if (basicStats.totalWins >= 1) achievements.push({ 
-            id: 'first_win', 
-            name: 'First Victory', 
-            description: 'Won your first match', 
-            unlocked: true 
-        });
-        if (basicStats.totalWins >= 5) achievements.push({ 
-            id: 'five_wins', 
-            name: 'Getting Started', 
-            description: 'Won 5 matches', 
-            unlocked: true 
-        });
-        if (basicStats.totalWins >= 10) achievements.push({ 
-            id: 'ten_wins', 
-            name: 'Double Digits', 
-            description: 'Won 10 matches', 
-            unlocked: true 
-        });
+        if (basicStats.totalWins >= 1) {
+            achievements.push({ 
+                id: 'first_win', 
+                name: 'First Victory', 
+                description: 'Won your first match', 
+                unlocked: true,
+                icon: '🏆'
+            });
+        }
+        
+        if (basicStats.totalWins >= 5) {
+            achievements.push({ 
+                id: 'five_wins', 
+                name: 'Getting Started', 
+                description: 'Won 5 matches', 
+                unlocked: true,
+                icon: '🎯'
+            });
+        }
+        
+        if (basicStats.totalWins >= 10) {
+            achievements.push({ 
+                id: 'ten_wins', 
+                name: 'Double Digits', 
+                description: 'Won 10 matches', 
+                unlocked: true,
+                icon: '🏅'
+            });
+        }
         
         // Streak-based achievements
         if (basicStats.currentStreak >= 3 && basicStats.streakType === 'wins') {
             achievements.push({ 
-                id: 'three_streak', 
+                id: 'hot_streak', 
                 name: 'Hot Streak', 
                 description: 'Won 3 matches in a row', 
-                unlocked: true 
+                unlocked: true,
+                icon: '🔥'
             });
         }
         
         // Win rate achievements
         if (basicStats.winRate >= 70 && basicStats.totalMatches >= 10) {
             achievements.push({ 
-                id: 'high_win_rate', 
+                id: 'dominator', 
                 name: 'Dominator', 
                 description: '70%+ win rate with 10+ matches', 
-                unlocked: true 
+                unlocked: true,
+                icon: '👑'
+            });
+        }
+        
+        // Games played achievements
+        if (basicStats.totalMatches >= 10) {
+            achievements.push({ 
+                id: 'veteran', 
+                name: 'Veteran Player', 
+                description: 'Played 10+ matches', 
+                unlocked: true,
+                icon: '🎮'
             });
         }
         
@@ -430,35 +520,40 @@ class StatsService {
         };
     }
 
-    // Additional helper methods for enhanced stats...
-    calculatePerformanceTrend(matches, playerId, days) {
-        // Implementation for performance trend calculation
-        return [];
-    }
-
-    calculateOpponentStats(matches, playerId) {
-        // Implementation for opponent statistics
-        return {};
-    }
-
-    calculateTimeBasedStats(matches, playerId) {
-        // Implementation for time-based statistics
-        return {};
-    }
-
-    getDetailedRecentForm(matches, playerId, count) {
-        // Implementation for detailed recent form
-        return [];
-    }
-
-    calculateDayOfWeekStats(matches, playerId) {
-        // Implementation for day of week statistics
-        return {};
-    }
-
-    calculateScoreAnalysis(matches, playerId) {
-        // Implementation for score analysis
-        return {};
+    /**
+     * Force sync all player stats (useful for data migration)
+     * @returns {Promise<void>}
+     */
+    async syncAllPlayerStats() {
+        try {
+            const db = this.getDb();
+            
+            console.log('🔄 Starting sync for all players...');
+            
+            // Get all unique player IDs from matches
+            const matchesSnapshot = await db.collection('matches').get();
+            const playerIds = new Set();
+            
+            matchesSnapshot.forEach(doc => {
+                const match = doc.data();
+                if (match.player1Id) playerIds.add(match.player1Id);
+                if (match.player2Id) playerIds.add(match.player2Id);
+            });
+            
+            console.log(`📊 Found ${playerIds.size} unique players to sync`);
+            
+            // Sync stats for each player
+            const syncPromises = Array.from(playerIds).map(playerId => 
+                this.syncPlayerStats(playerId)
+            );
+            
+            await Promise.all(syncPromises);
+            
+            console.log('✅ All player stats synced successfully');
+        } catch (error) {
+            console.error('❌ Error syncing all player stats:', error);
+            throw error;
+        }
     }
 }
 
