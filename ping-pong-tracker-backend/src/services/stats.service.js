@@ -1,561 +1,287 @@
-// ping-pong-tracker-backend/src/services/stats.service.js
-const admin = require('firebase-admin');
+const admin = require("firebase-admin");
+const logger = require("../utils/logger");
 
+/**
+ * Enhanced Stats Service
+ * Automatically syncs playerStats with matches collection
+ * Calculates: totalWins, winStreak, gamesPlayed
+ */
 class StatsService {
-    /**
-     * Helper method to get database instance
-     * Prevents Firebase initialization issues
-     */
-    getDb() {
-        return admin.firestore();
+  constructor() {
+    this.db = null;
+  }
+
+  /**
+   * Get Firestore database instance
+   */
+  getDb() {
+    if (!this.db) {
+      this.db = admin.firestore();
+    }
+    return this.db;
+  }
+
+  /**
+   * Sync player statistics based on completed matches
+   * @param {string} playerId - The player ID to sync stats for
+   * @returns {Promise<Object>} Updated player stats
+   */
+  async syncPlayerStats(playerId) {
+    try {
+      logger.info(`Starting stats sync for player: ${playerId}`);
+      const db = this.getDb();
+
+      // Get all completed matches for this player
+      const matchesQuery1 = db
+        .collection("matches")
+        .where("status", "==", "completed")
+        .where("player1Id", "==", playerId);
+
+      const matchesQuery2 = db
+        .collection("matches")
+        .where("status", "==", "completed")
+        .where("player2Id", "==", playerId);
+
+      const [snapshot1, snapshot2] = await Promise.all([
+        matchesQuery1.get(),
+        matchesQuery2.get(),
+      ]);
+
+      // Combine results and remove duplicates
+      const allMatches = new Map();
+
+      snapshot1.docs.forEach((doc) => {
+        allMatches.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+
+      snapshot2.docs.forEach((doc) => {
+        allMatches.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+
+      const matches = Array.from(allMatches.values());
+
+      if (matches.length === 0) {
+        logger.info(`No completed matches found for player: ${playerId}`);
+        return await this.createEmptyPlayerStats(playerId);
+      }
+
+      // Calculate stats from matches
+      const stats = this.calculatePlayerStats(playerId, matches);
+
+      // Update playerStats collection
+      const playerStatsRef = db.collection("playerStats").doc(playerId);
+      await playerStatsRef.set(
+        {
+          ...stats,
+          lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastSyncedMatchCount: matches.length,
+        },
+        { merge: true }
+      );
+
+      logger.info(`Stats synced successfully for player ${playerId}:`, stats);
+      return stats;
+    } catch (error) {
+      logger.error(`Error syncing stats for player ${playerId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate player statistics from matches
+   * @param {string} playerId - The player ID
+   * @param {Array} matches - Array of completed matches
+   * @returns {Object} Calculated stats
+   */
+  calculatePlayerStats(playerId, matches) {
+    let totalWins = 0;
+    let gamesPlayed = matches.length;
+    let currentWinStreak = 0;
+    let maxWinStreak = 0;
+    let tempWinStreak = 0;
+
+    // Sort matches by completion date to calculate win streak correctly
+    const sortedMatches = matches.sort((a, b) => {
+      const dateA = a.completedDate?.toDate() || new Date(0);
+      const dateB = b.completedDate?.toDate() || new Date(0);
+      return dateA - dateB;
+    });
+
+    // Calculate stats from each match
+    for (const match of sortedMatches) {
+      const isWinner = match.winnerId === playerId;
+
+      if (isWinner) {
+        totalWins++;
+        tempWinStreak++;
+        maxWinStreak = Math.max(maxWinStreak, tempWinStreak);
+      } else {
+        tempWinStreak = 0; // Reset streak on loss
+      }
     }
 
-    /**
-     * Sync player stats after match completion
-     * This is the CRITICAL method that fixes the playerStats sync issue
-     * @param {string} playerId - Player ID to sync stats for
-     * @returns {Promise<Object>} - Updated player stats
-     */
-    async syncPlayerStats(playerId) {
+    // Current win streak is the streak at the end (most recent matches)
+    currentWinStreak = tempWinStreak;
+
+    return {
+      playerId,
+      totalWins,
+      gamesPlayed,
+      winStreak: currentWinStreak,
+      maxWinStreak,
+      totalLosses: gamesPlayed - totalWins,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    };
+  }
+
+  /**
+   * Create empty player stats for new players
+   * @param {string} playerId - The player ID
+   * @returns {Promise<Object>} Empty stats object
+   */
+  async createEmptyPlayerStats(playerId) {
+    const emptyStats = {
+      playerId,
+      totalWins: 0,
+      gamesPlayed: 0,
+      winStreak: 0,
+      maxWinStreak: 0,
+      totalLosses: 0,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastSyncedMatchCount: 0,
+    };
+
+    const db = this.getDb();
+    await db
+      .collection("playerStats")
+      .doc(playerId)
+      .set(emptyStats, { merge: true });
+
+    logger.info(`Created empty stats for new player: ${playerId}`);
+    return emptyStats;
+  }
+
+  /**
+   * Sync stats for both players involved in a match
+   * @param {string} matchId - The match ID
+   * @returns {Promise<Object>} Sync results for both players
+   */
+  async syncMatchPlayers(matchId) {
+    try {
+      logger.info(`Syncing stats for match: ${matchId}`);
+      const db = this.getDb();
+
+      // Get the match details
+      const matchDoc = await db.collection("matches").doc(matchId).get();
+
+      if (!matchDoc.exists) {
+        throw new Error(`Match not found: ${matchId}`);
+      }
+
+      const matchData = matchDoc.data();
+
+      if (matchData.status !== "completed") {
+        logger.info(`Match ${matchId} is not completed, skipping stats sync`);
+        return { skipped: true, reason: "Match not completed" };
+      }
+
+      // Sync stats for both players
+      const [player1Stats, player2Stats] = await Promise.all([
+        this.syncPlayerStats(matchData.player1Id),
+        this.syncPlayerStats(matchData.player2Id),
+      ]);
+
+      logger.info(`Successfully synced stats for match ${matchId}`);
+      return {
+        matchId,
+        player1Stats,
+        player2Stats,
+        syncedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      logger.error(`Error syncing match players for match ${matchId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get player statistics
+   * @param {string} playerId - The player ID
+   * @returns {Promise<Object>} Player statistics
+   */
+  async getPlayerStats(playerId) {
+    try {
+      const db = this.getDb();
+      const playerStatsDoc = await db
+        .collection("playerStats")
+        .doc(playerId)
+        .get();
+
+      if (!playerStatsDoc.exists) {
+        logger.info(
+          `No stats found for player ${playerId}, creating empty stats`
+        );
+        return await this.createEmptyPlayerStats(playerId);
+      }
+
+      return {
+        id: playerStatsDoc.id,
+        ...playerStatsDoc.data(),
+      };
+    } catch (error) {
+      logger.error(`Error getting stats for player ${playerId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sync stats for all players (bulk operation)
+   * @returns {Promise<Array>} Array of sync results
+   */
+  async syncAllPlayerStats() {
+    try {
+      logger.info("Starting bulk stats sync for all players");
+      const db = this.getDb();
+
+      // Get all unique player IDs from completed matches
+      const matchesSnapshot = await db
+        .collection("matches")
+        .where("status", "==", "completed")
+        .get();
+
+      const playerIds = new Set();
+      matchesSnapshot.docs.forEach((doc) => {
+        const match = doc.data();
+        if (match.player1Id) playerIds.add(match.player1Id);
+        if (match.player2Id) playerIds.add(match.player2Id);
+      });
+
+      logger.info(`Found ${playerIds.size} unique players to sync`);
+
+      // Sync stats for each player
+      const syncResults = [];
+      for (const playerId of playerIds) {
         try {
-            const db = this.getDb();
-            
-            console.log(`🔄 Syncing stats for player: ${playerId}`);
-            
-            // Calculate fresh stats from all completed matches
-            const freshStats = await this.calculatePlayerStats(playerId);
-            
-            // Update playerStats collection with merge to preserve existing fields
-            await db.collection('playerStats').doc(playerId).set(freshStats, { merge: true });
-            
-            console.log(`✅ Stats synced successfully for player: ${playerId}`, {
-                totalMatches: freshStats.totalMatches,
-                totalWins: freshStats.totalWins,
-                winRate: freshStats.winRate
-            });
-            
-            return freshStats;
+          const stats = await this.syncPlayerStats(playerId);
+          syncResults.push({ playerId, success: true, stats });
         } catch (error) {
-            console.error(`❌ Error syncing stats for player ${playerId}:`, error);
-            throw error;
+          logger.error(`Failed to sync stats for player ${playerId}:`, error);
+          syncResults.push({ playerId, success: false, error: error.message });
         }
+      }
+
+      logger.info(
+        `Bulk sync completed. ${syncResults.filter((r) => r.success).length}/${
+          syncResults.length
+        } players synced successfully`
+      );
+      return syncResults;
+    } catch (error) {
+      logger.error("Error in bulk stats sync:", error);
+      throw error;
     }
-
-    /**
-     * Calculate comprehensive player statistics from match data
-     * @param {string} playerId - The player's UID
-     * @returns {Promise<Object>} Player statistics object
-     */
-    async calculatePlayerStats(playerId) {
-        try {
-            const db = this.getDb();
-            
-            console.log(`📊 Calculating stats for player: ${playerId}`);
-            
-            // Fetch all completed matches for this player
-            const matchesRef = db.collection('matches');
-            
-            // Query for matches where player is player1
-            const player1Matches = await matchesRef
-                .where('player1Id', '==', playerId)
-                .where('status', '==', 'completed')
-                .get();
-            
-            // Query for matches where player is player2
-            const player2Matches = await matchesRef
-                .where('player2Id', '==', playerId)
-                .where('status', '==', 'completed')
-                .get();
-            
-            // Combine all matches
-            const playerMatches = [];
-            
-            player1Matches.forEach(doc => {
-                playerMatches.push({
-                    id: doc.id,
-                    ...doc.data()
-                });
-            });
-            
-            player2Matches.forEach(doc => {
-                playerMatches.push({
-                    id: doc.id,
-                    ...doc.data()
-                });
-            });
-
-            console.log(`📈 Found ${playerMatches.length} completed matches for player ${playerId}`);
-
-            if (playerMatches.length === 0) {
-                console.log(`🆕 No matches found, returning default stats for player ${playerId}`);
-                return this.getDefaultStats(playerId);
-            }
-
-            // Calculate basic statistics
-            const totalMatches = playerMatches.length;
-            let totalWins = 0;
-            let totalLosses = 0;
-
-            // Calculate wins and losses by comparing scores
-            playerMatches.forEach(match => {
-                const isPlayer1 = match.player1Id === playerId;
-                const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
-                const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
-                
-                if (playerScore > opponentScore) {
-                    totalWins++;
-                } else if (playerScore < opponentScore) {
-                    totalLosses++;
-                }
-                // Ties are not counted as wins or losses
-            });
-
-            const winRate = totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
-
-            // Calculate current streak
-            const { currentStreak, streakType } = this.calculateStreak(playerMatches, playerId);
-
-            // Calculate average score differential
-            const avgScoreDiff = this.calculateAverageScoreDifferential(playerMatches, playerId);
-
-            // Calculate recent form (last 5 matches)
-            const recentForm = this.calculateRecentForm(playerMatches, playerId, 5);
-
-            // Calculate recent win rate (last 10 matches)
-            const recentMatches = playerMatches
-                .sort((a, b) => {
-                    const dateA = a.completedDate?.toDate ? a.completedDate.toDate() : new Date(a.completedDate);
-                    const dateB = b.completedDate?.toDate ? b.completedDate.toDate() : new Date(b.completedDate);
-                    return dateB - dateA;
-                })
-                .slice(0, 10);
-            
-            const recentWins = recentMatches.filter(match => {
-                const isPlayer1 = match.player1Id === playerId;
-                const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
-                const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
-                return playerScore > opponentScore;
-            }).length;
-            
-            const recentWinRate = recentMatches.length > 0 
-                ? Math.round((recentWins / recentMatches.length) * 100)
-                : winRate;
-
-            // Calculate ranking score
-            const rankingScore = this.calculateRankingScore(winRate, totalWins, recentWinRate);
-
-            // Calculate location-based statistics
-            const locationStats = this.calculateLocationStats(playerMatches, playerId);
-
-            // Calculate monthly statistics
-            const monthlyStats = this.calculateMonthlyStats(playerMatches, playerId);
-
-            // Get last match date
-            const lastMatchDate = playerMatches.length > 0 
-                ? playerMatches.sort((a, b) => {
-                    const dateA = a.completedDate?.toDate ? a.completedDate.toDate() : new Date(a.completedDate);
-                    const dateB = b.completedDate?.toDate ? b.completedDate.toDate() : new Date(b.completedDate);
-                    return dateB - dateA;
-                })[0].completedDate
-                : null;
-
-            const stats = {
-                playerId,
-                totalMatches,
-                totalWins,
-                totalLosses,
-                winRate,
-                currentStreak,
-                streakType,
-                averageScoreDiff: avgScoreDiff,
-                recentForm,
-                recentWinRate,
-                rankingScore,
-                locationStats,
-                monthlyStats,
-                lastMatchDate,
-                lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-            };
-
-            console.log(`📊 Calculated stats for ${playerId}:`, {
-                totalMatches,
-                totalWins,
-                totalLosses,
-                winRate,
-                currentStreak,
-                streakType
-            });
-
-            return stats;
-        } catch (error) {
-            console.error('❌ Error calculating player stats:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Get player profile stats (enhanced version for frontend)
-     * @param {string} playerId - Player ID
-     * @returns {Promise<Object>} - Enhanced player statistics
-     */
-    async getPlayerProfileStats(playerId) {
-        try {
-            const db = this.getDb();
-            
-            console.log(`📋 Getting profile stats for player: ${playerId}`);
-            
-            // Get basic stats from playerStats collection
-            const statsDoc = await db.collection('playerStats').doc(playerId).get();
-            
-            if (!statsDoc.exists) {
-                console.log('📊 No player stats found, calculating initial statistics...');
-                return await this.calculatePlayerStats(playerId);
-            }
-            
-            const basicStats = statsDoc.data();
-            console.log('📊 Found existing player stats:', {
-                totalMatches: basicStats.totalMatches,
-                totalWins: basicStats.totalWins,
-                winRate: basicStats.winRate
-            });
-            
-            // Return basic stats with achievements calculated
-            const achievements = this.calculateAchievements([], playerId, basicStats);
-            
-            return {
-                ...basicStats,
-                achievements
-            };
-        } catch (error) {
-            console.error('❌ Error getting player profile stats:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Calculate current win/loss streak
-     * @param {Array} matches - Player's matches
-     * @param {string} playerId - Player's UID
-     * @returns {Object} - Streak information
-     */
-    calculateStreak(matches, playerId) {
-        if (matches.length === 0) {
-            return { currentStreak: 0, streakType: 'none' };
-        }
-
-        // Sort matches by completion date (most recent first)
-        const sortedMatches = matches.sort((a, b) => {
-            const dateA = a.completedDate?.toDate ? a.completedDate.toDate() : new Date(a.completedDate);
-            const dateB = b.completedDate?.toDate ? b.completedDate.toDate() : new Date(b.completedDate);
-            return dateB - dateA;
-        });
-
-        let currentStreak = 0;
-        let streakType = 'none';
-        
-        for (const match of sortedMatches) {
-            const isPlayer1 = match.player1Id === playerId;
-            const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
-            const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
-            const isWin = playerScore > opponentScore;
-            
-            if (currentStreak === 0) {
-                // First match sets the streak type
-                currentStreak = 1;
-                streakType = isWin ? 'wins' : 'losses';
-            } else if ((streakType === 'wins' && isWin) || (streakType === 'losses' && !isWin)) {
-                // Continue the streak
-                currentStreak++;
-            } else {
-                // Streak broken
-                break;
-            }
-        }
-
-        return { currentStreak, streakType };
-    }
-
-    /**
-     * Calculate average score differential
-     * @param {Array} matches - Player's matches
-     * @param {string} playerId - Player's UID
-     * @returns {number} - Average score differential
-     */
-    calculateAverageScoreDifferential(matches, playerId) {
-        if (matches.length === 0) return 0;
-
-        const totalDiff = matches.reduce((sum, match) => {
-            const isPlayer1 = match.player1Id === playerId;
-            const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
-            const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
-            return sum + (playerScore - opponentScore);
-        }, 0);
-
-        return Math.round((totalDiff / matches.length) * 10) / 10;
-    }
-
-    /**
-     * Calculate recent form
-     * @param {Array} matches - Player's matches
-     * @param {string} playerId - Player's UID
-     * @param {number} count - Number of recent matches
-     * @returns {Array} - Recent form array (true = win, false = loss)
-     */
-    calculateRecentForm(matches, playerId, count = 5) {
-        const recentMatches = matches
-            .sort((a, b) => {
-                const dateA = a.completedDate?.toDate ? a.completedDate.toDate() : new Date(a.completedDate);
-                const dateB = b.completedDate?.toDate ? b.completedDate.toDate() : new Date(b.completedDate);
-                return dateB - dateA;
-            })
-            .slice(0, count);
-
-        return recentMatches.map(match => {
-            const isPlayer1 = match.player1Id === playerId;
-            const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
-            const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
-            return playerScore > opponentScore;
-        });
-    }
-
-    /**
-     * Calculate ranking score
-     * @param {number} winRate - Win rate percentage
-     * @param {number} totalWins - Total wins
-     * @param {number} recentWinRate - Recent win rate
-     * @returns {number} - Ranking score
-     */
-    calculateRankingScore(winRate, totalWins, recentWinRate) {
-        const baseScore = winRate * 0.6;
-        const activityBonus = Math.min(totalWins * 0.5, 20);
-        const recentFormBonus = (recentWinRate - winRate) * 0.1;
-        
-        return Math.round((baseScore + activityBonus + recentFormBonus) * 10) / 10;
-    }
-
-    /**
-     * Calculate location-based statistics
-     * @param {Array} matches - Player's matches
-     * @param {string} playerId - Player's UID
-     * @returns {Object} - Location statistics
-     */
-    calculateLocationStats(matches, playerId) {
-        const locationStats = {};
-
-        matches.forEach(match => {
-            const location = match.location || 'Unknown';
-            
-            if (!locationStats[location]) {
-                locationStats[location] = {
-                    matches: 0,
-                    wins: 0,
-                    losses: 0,
-                    winRate: 0
-                };
-            }
-
-            locationStats[location].matches++;
-            
-            const isPlayer1 = match.player1Id === playerId;
-            const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
-            const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
-            
-            if (playerScore > opponentScore) {
-                locationStats[location].wins++;
-            } else if (playerScore < opponentScore) {
-                locationStats[location].losses++;
-            }
-
-            locationStats[location].winRate = Math.round(
-                (locationStats[location].wins / locationStats[location].matches) * 100
-            );
-        });
-
-        return locationStats;
-    }
-
-    /**
-     * Calculate monthly statistics
-     * @param {Array} matches - Player's matches
-     * @param {string} playerId - Player's UID
-     * @returns {Object} - Monthly statistics
-     */
-    calculateMonthlyStats(matches, playerId) {
-        const monthlyStats = {};
-
-        matches.forEach(match => {
-            const date = match.completedDate?.toDate ? match.completedDate.toDate() : new Date(match.completedDate);
-            if (!date) return;
-
-            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            
-            if (!monthlyStats[monthKey]) {
-                monthlyStats[monthKey] = {
-                    matches: 0,
-                    wins: 0,
-                    losses: 0,
-                    winRate: 0
-                };
-            }
-
-            monthlyStats[monthKey].matches++;
-            
-            const isPlayer1 = match.player1Id === playerId;
-            const playerScore = isPlayer1 ? match.player1Score : match.player2Score;
-            const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
-            
-            if (playerScore > opponentScore) {
-                monthlyStats[monthKey].wins++;
-            } else if (playerScore < opponentScore) {
-                monthlyStats[monthKey].losses++;
-            }
-
-            monthlyStats[monthKey].winRate = Math.round(
-                (monthlyStats[monthKey].wins / monthlyStats[monthKey].matches) * 100
-            );
-        });
-
-        return monthlyStats;
-    }
-
-    /**
-     * Calculate achievements for Achievements Card
-     * @param {Array} matches - Player's matches (can be empty if using basicStats)
-     * @param {string} playerId - Player's UID
-     * @param {Object} basicStats - Basic player statistics
-     * @returns {Array} - Array of achievements
-     */
-    calculateAchievements(matches, playerId, basicStats) {
-        const achievements = [];
-        
-        // Win-based achievements
-        if (basicStats.totalWins >= 1) {
-            achievements.push({ 
-                id: 'first_win', 
-                name: 'First Victory', 
-                description: 'Won your first match', 
-                unlocked: true,
-                icon: '🏆'
-            });
-        }
-        
-        if (basicStats.totalWins >= 5) {
-            achievements.push({ 
-                id: 'five_wins', 
-                name: 'Getting Started', 
-                description: 'Won 5 matches', 
-                unlocked: true,
-                icon: '🎯'
-            });
-        }
-        
-        if (basicStats.totalWins >= 10) {
-            achievements.push({ 
-                id: 'ten_wins', 
-                name: 'Double Digits', 
-                description: 'Won 10 matches', 
-                unlocked: true,
-                icon: '🏅'
-            });
-        }
-        
-        // Streak-based achievements
-        if (basicStats.currentStreak >= 3 && basicStats.streakType === 'wins') {
-            achievements.push({ 
-                id: 'hot_streak', 
-                name: 'Hot Streak', 
-                description: 'Won 3 matches in a row', 
-                unlocked: true,
-                icon: '🔥'
-            });
-        }
-        
-        // Win rate achievements
-        if (basicStats.winRate >= 70 && basicStats.totalMatches >= 10) {
-            achievements.push({ 
-                id: 'dominator', 
-                name: 'Dominator', 
-                description: '70%+ win rate with 10+ matches', 
-                unlocked: true,
-                icon: '👑'
-            });
-        }
-        
-        // Games played achievements
-        if (basicStats.totalMatches >= 10) {
-            achievements.push({ 
-                id: 'veteran', 
-                name: 'Veteran Player', 
-                description: 'Played 10+ matches', 
-                unlocked: true,
-                icon: '🎮'
-            });
-        }
-        
-        return achievements;
-    }
-
-    /**
-     * Get default stats for new players
-     * @param {string} playerId - Player ID
-     * @returns {Object} - Default stats object
-     */
-    getDefaultStats(playerId) {
-        return {
-            playerId,
-            totalMatches: 0,
-            totalWins: 0,
-            totalLosses: 0,
-            winRate: 0,
-            currentStreak: 0,
-            streakType: 'none',
-            averageScoreDiff: 0,
-            recentForm: [],
-            recentWinRate: 0,
-            rankingScore: 0,
-            locationStats: {},
-            monthlyStats: {},
-            lastMatchDate: null,
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-        };
-    }
-
-    /**
-     * Force sync all player stats (useful for data migration)
-     * @returns {Promise<void>}
-     */
-    async syncAllPlayerStats() {
-        try {
-            const db = this.getDb();
-            
-            console.log('🔄 Starting sync for all players...');
-            
-            // Get all unique player IDs from matches
-            const matchesSnapshot = await db.collection('matches').get();
-            const playerIds = new Set();
-            
-            matchesSnapshot.forEach(doc => {
-                const match = doc.data();
-                if (match.player1Id) playerIds.add(match.player1Id);
-                if (match.player2Id) playerIds.add(match.player2Id);
-            });
-            
-            console.log(`📊 Found ${playerIds.size} unique players to sync`);
-            
-            // Sync stats for each player
-            const syncPromises = Array.from(playerIds).map(playerId => 
-                this.syncPlayerStats(playerId)
-            );
-            
-            await Promise.all(syncPromises);
-            
-            console.log('✅ All player stats synced successfully');
-        } catch (error) {
-            console.error('❌ Error syncing all player stats:', error);
-            throw error;
-        }
-    }
+  }
 }
 
 module.exports = new StatsService();
-

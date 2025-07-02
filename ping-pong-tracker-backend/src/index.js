@@ -2,8 +2,8 @@ require('dotenv').config();
 const http = require('http');
 const app = require('./app');
 const { initializeFirebase } = require('./config/database');
-// const { initializeSocket } = require('./config/socket');
-// const { initializeRealtime } = require('./utils/realtime');
+const { initializeSocket } = require('./config/socket');
+const { initializeRealtime } = require('./utils/realtime');
 const logger = require('./utils/logger');
 
 
@@ -21,11 +21,11 @@ const initializeServices = async () => {
         logger.info('Firebase Admin SDK initialized successfully');
         
         // Initialize Socket.IO
-        // const io = initializeSocket(server);
+        const io = initializeSocket(server);
         logger.info('Socket.IO server initialized successfully');
         
         // Initialize real-time event system
-        // initializeRealtime(io);
+        initializeRealtime(io);
         logger.info('Real-time event system initialized successfully');
         
         return true;

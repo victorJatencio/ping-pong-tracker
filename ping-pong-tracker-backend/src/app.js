@@ -62,8 +62,8 @@ app.get('/', (req, res) => {
 });
 
 // API routes
-const apiRoutes = require('./api/routes');
-app.use('/api', apiRoutes);
+// const apiRoutes = require('./api/routes');
+// app.use('/api', apiRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
