@@ -1,4 +1,4 @@
-import { createApi } from "@reduxjs/toolkit/query/react";
+import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import {
   getDocs,
   addDoc,
@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../config/firebase";
 
+// Firebase base query (keep existing functionality)
 const firebaseBaseQuery = () => async (args) => {
   try {
     if (args.collection && args.queryConstraints) {
@@ -61,11 +62,24 @@ const firebaseBaseQuery = () => async (args) => {
   }
 };
 
+// Backend API base query (new)
+const backendBaseQuery = fetchBaseQuery({
+  baseUrl: 'http://localhost:5000/api',
+  prepareHeaders: (headers) => {
+    headers.set('Content-Type', 'application/json');
+    return headers;
+  },
+});
+
+// Create separate API slices for different base queries
 export const apiSlice = createApi({
   reducerPath: "api",
-  baseQuery: firebaseBaseQuery(),
-  tagTypes: ["Match", "User", "Invitation", "PlayerStats"],
+  baseQuery: firebaseBaseQuery(), // Default to Firebase for existing queries
+  tagTypes: ["Match", "User", "Invitation", "PlayerStats", "BackendPlayerStats"],
   endpoints: (builder) => ({
+    // ========================================
+    // EXISTING FIREBASE ENDPOINTS (Keep as-is)
+    // ========================================
     getAllUsers: builder.query({
       query: () => ({
         collection: "users",
@@ -167,6 +181,7 @@ export const apiSlice = createApi({
       },
       providesTags: ["Match"],
     }),
+
     getPendingInvitations: builder.query({
       queryFn: async (userId) => {
         try {
@@ -213,6 +228,8 @@ export const apiSlice = createApi({
             ]
           : [{ type: "Invitation", id: "LIST" }],
     }),
+
+    // Original Firebase playerStats query (keep for compatibility)
     getPlayerStats: builder.query({
       query: (userId) => ({
         collection: "playerStats",
@@ -222,6 +239,7 @@ export const apiSlice = createApi({
         { type: "PlayerStats", id: userId },
       ],
     }),
+
     acceptInvitation: builder.mutation({
       query: ({ invitationId }) => ({
         collection: "invitations",
@@ -256,6 +274,7 @@ export const apiSlice = createApi({
         }
       },
     }),
+
     declineInvitation: builder.mutation({
       query: ({ invitationId }) => ({
         collection: "invitations",
@@ -292,7 +311,75 @@ export const apiSlice = createApi({
   }),
 });
 
+// Create separate backend API slice
+export const backendApiSlice = createApi({
+  reducerPath: "backendApi",
+  baseQuery: backendBaseQuery,
+  tagTypes: ["BackendPlayerStats"],
+  endpoints: (builder) => ({
+    // Get player stats from backend (synced data)
+    getPlayerStatsFromBackend: builder.query({
+      query: (userId) => `stats/player/${userId}`,
+      providesTags: (result, error, userId) => [
+        { type: "BackendPlayerStats", id: userId },
+      ],
+      transformResponse: (response) => {
+        console.log("🔍 getPlayerStatsFromBackend Debug:");
+        console.log("  - Raw backend response:", response);
+        
+        // Backend returns the stats object directly
+        if (response && response.success && response.data) {
+          console.log("  - Transformed stats:", response.data);
+          return response.data;
+        }
+        
+        // Fallback for empty or error response
+        console.warn("  - No stats found, returning defaults");
+        return {
+          totalWins: 0,
+          winStreak: 0,
+          maxWinStreak: 0,
+          gamesPlayed: 0,
+          totalLosses: 0,
+          userId: userId
+        };
+      },
+      transformErrorResponse: (response) => {
+        console.error("Backend playerStats error:", response);
+        return {
+          status: response.status,
+          message: response.data?.message || 'Failed to fetch player stats'
+        };
+      },
+    }),
+
+    // Sync player stats (trigger backend sync)
+    syncPlayerStats: builder.mutation({
+      query: (userId) => ({
+        url: `stats/sync/${userId}`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, userId) => [
+        { type: "BackendPlayerStats", id: userId },
+      ],
+    }),
+
+    // Get all player stats (for leaderboards, etc.)
+    getAllPlayerStatsFromBackend: builder.query({
+      query: () => 'stats/players',
+      providesTags: ["BackendPlayerStats"],
+      transformResponse: (response) => {
+        if (response && response.success && response.data) {
+          return response.data;
+        }
+        return [];
+      },
+    }),
+  }),
+});
+
 export const {
+  // Existing Firebase hooks
   useGetAllUsersQuery,
   useGetRecentMatchesQuery,
   useGetPendingInvitationsQuery,
@@ -300,3 +387,11 @@ export const {
   useAcceptInvitationMutation,
   useDeclineInvitationMutation,
 } = apiSlice;
+
+export const {
+  // New Backend API hooks
+  useGetPlayerStatsFromBackendQuery,
+  useSyncPlayerStatsMutation,
+  useGetAllPlayerStatsFromBackendQuery,
+} = backendApiSlice;
+
