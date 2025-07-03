@@ -32,38 +32,22 @@ class StatsService {
       const db = this.getDb();
 
       // Get all completed matches for this player
-      const matchesQuery1 = db
+      const matchesSnapshot = await db
         .collection("matches")
         .where("status", "==", "completed")
-        .where("player1Id", "==", playerId);
+        .where("participants", "array-contains", playerId)
+        .orderBy("completedDate", "asc")
+        .get();
 
-      const matchesQuery2 = db
-        .collection("matches")
-        .where("status", "==", "completed")
-        .where("player2Id", "==", playerId);
-
-      const [snapshot1, snapshot2] = await Promise.all([
-        matchesQuery1.get(),
-        matchesQuery2.get(),
-      ]);
-
-      // Combine results and remove duplicates
-      const allMatches = new Map();
-
-      snapshot1.docs.forEach((doc) => {
-        allMatches.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-
-      snapshot2.docs.forEach((doc) => {
-        allMatches.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-
-      const matches = Array.from(allMatches.values());
-
-      if (matches.length === 0) {
+      if (matchesSnapshot.empty) {
         logger.info(`No completed matches found for player: ${playerId}`);
         return await this.createEmptyPlayerStats(playerId);
       }
+
+      const matches = matchesSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
       // Calculate stats from matches
       const stats = this.calculatePlayerStats(playerId, matches);
@@ -206,36 +190,6 @@ class StatsService {
   }
 
   /**
-   * Get player statistics
-   * @param {string} playerId - The player ID
-   * @returns {Promise<Object>} Player statistics
-   */
-  async getPlayerStats(playerId) {
-    try {
-      const db = this.getDb();
-      const playerStatsDoc = await db
-        .collection("playerStats")
-        .doc(playerId)
-        .get();
-
-      if (!playerStatsDoc.exists) {
-        logger.info(
-          `No stats found for player ${playerId}, creating empty stats`
-        );
-        return await this.createEmptyPlayerStats(playerId);
-      }
-
-      return {
-        id: playerStatsDoc.id,
-        ...playerStatsDoc.data(),
-      };
-    } catch (error) {
-      logger.error(`Error getting stats for player ${playerId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
    * Sync stats for all players (bulk operation)
    * @returns {Promise<Array>} Array of sync results
    */
@@ -280,6 +234,205 @@ class StatsService {
     } catch (error) {
       logger.error("Error in bulk stats sync:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Get player statistics
+   * @param {string} playerId - The player ID
+   * @returns {Promise<Object>} Player statistics
+   */
+  async getPlayerStats(playerId) {
+    try {
+      const db = this.getDb();
+      const playerStatsDoc = await db
+        .collection("playerStats")
+        .doc(playerId)
+        .get();
+
+      if (!playerStatsDoc.exists) {
+        logger.info(
+          `No stats found for player ${playerId}, creating empty stats`
+        );
+        return await this.createEmptyPlayerStats(playerId);
+      }
+
+      return {
+        id: playerStatsDoc.id,
+        ...playerStatsDoc.data(),
+      };
+    } catch (error) {
+      logger.error(`Error getting stats for player ${playerId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Validate and fix data inconsistencies
+   * @param {string} playerId - The player ID to validate
+   * @returns {Promise<Object>} Validation results
+   */
+  async validatePlayerStats(playerId) {
+    try {
+      const db = this.getDb();
+
+      // Get current stats from playerStats collection
+      const currentStats = await this.getPlayerStats(playerId);
+
+      // Calculate what stats should be based on matches
+      const matchesSnapshot = await db
+        .collection("matches")
+        .where("status", "==", "completed")
+        .where("participants", "array-contains", playerId)
+        .get();
+
+      const matches = matchesSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      const calculatedStats = this.calculatePlayerStats(playerId, matches);
+
+      // Compare current vs calculated
+      const discrepancies = {};
+      const fieldsToCheck = ["totalWins", "gamesPlayed", "winStreak"];
+
+      fieldsToCheck.forEach((field) => {
+        if (currentStats[field] !== calculatedStats[field]) {
+          discrepancies[field] = {
+            current: currentStats[field],
+            calculated: calculatedStats[field],
+            difference: calculatedStats[field] - currentStats[field],
+          };
+        }
+      });
+
+      return {
+        playerId,
+        hasDiscrepancies: Object.keys(discrepancies).length > 0,
+        discrepancies,
+        currentStats,
+        calculatedStats,
+        matchCount: matches.length,
+      };
+    } catch (error) {
+      logger.error(`Error validating stats for player ${playerId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get leaderboard preview (top 3 players by wins)
+   * @returns {Promise<Array>} Array of top 3 players with user details
+   */
+  async getLeaderboardPreview() {
+    try {
+      logger.info("Getting leaderboard preview (top 3 players)");
+      const db = this.getDb();
+
+      // Get top players by total wins
+      const playerStatsSnapshot = await db
+        .collection("playerStats")
+        .orderBy("totalWins", "desc")
+        .limit(3)
+        .get();
+
+      if (playerStatsSnapshot.empty) {
+        logger.info("No player stats found for leaderboard");
+        return [];
+      }
+
+      // Get user details for each player
+      const leaderboardData = [];
+
+      for (const doc of playerStatsSnapshot.docs) {
+        const stats = doc.data();
+        const playerId = doc.id;
+
+        try {
+          // Get user details from users collection
+          const userDoc = await db.collection("users").doc(playerId).get();
+
+          let userDetails = {
+            id: playerId,
+            displayName: "Unknown Player",
+            profileImage: null,
+            initials: "??",
+          };
+
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            userDetails = {
+              id: playerId,
+              displayName:
+                userData.displayName || userData.name || "Unknown Player",
+              profileImage: userData.profileImage || null,
+              initials: this.generateInitials(
+                userData.displayName || userData.name || "Unknown Player"
+              ),
+            };
+          }
+
+          leaderboardData.push({
+            position: leaderboardData.length + 1,
+            player: userDetails,
+            stats: {
+              totalWins: stats.totalWins || 0,
+              gamesPlayed: stats.gamesPlayed || 0,
+              winStreak: stats.winStreak || 0,
+            },
+          });
+        } catch (userError) {
+          logger.warn(
+            `Could not fetch user details for player ${playerId}:`,
+            userError
+          );
+
+          // Add player with minimal info if user details fail
+          leaderboardData.push({
+            position: leaderboardData.length + 1,
+            player: {
+              id: playerId,
+              displayName: "Unknown Player",
+              profileImage: null,
+              initials: "??",
+            },
+            stats: {
+              totalWins: stats.totalWins || 0,
+              gamesPlayed: stats.gamesPlayed || 0,
+              winStreak: stats.winStreak || 0,
+            },
+          });
+        }
+      }
+
+      logger.info(
+        `Leaderboard preview generated with ${leaderboardData.length} players`
+      );
+      return leaderboardData;
+    } catch (error) {
+      logger.error("Error getting leaderboard preview:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate initials from display name
+   * @param {string} displayName - The display name
+   * @returns {string} Generated initials
+   */
+  generateInitials(displayName) {
+    if (!displayName || typeof displayName !== "string") {
+      return "??";
+    }
+
+    const words = displayName.trim().split(/\s+/);
+
+    if (words.length === 1) {
+      // Single word: take first two characters
+      return words[0].substring(0, 2).toUpperCase();
+    } else {
+      // Multiple words: take first character of first two words
+      return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
     }
   }
 }
