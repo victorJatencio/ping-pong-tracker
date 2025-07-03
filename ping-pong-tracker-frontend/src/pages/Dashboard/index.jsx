@@ -28,6 +28,8 @@ import PendingInvitationsCard from '../../components/dashboard/PendingInvitation
 import AchievementsCard from "../../components/dashboard/AchievementsCard";
 // Import Leaderboard Preview Card
 import LeaderboardPreview from '../../components/dashboard/LeaderboardPreview';
+// Import Win/Loss Ratio Card
+import WinLossRatio from "../../components/dashboard/WinLossRatio";
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -164,50 +166,6 @@ const Dashboard = () => {
     { id: 3, name: "Win Streak", icon: "🔥", unlocked: false },
   ];
 
-  // Chart data for Win/Loss ratio (keeping existing logic)
-  const chartData = useMemo(() => {
-    if (!userStats) return null;
-
-    const wins = userStats.totalWins || 0;
-    const losses = userStats.totalLosses || 0;
-    const total = wins + losses;
-
-    if (total === 0) return null;
-
-    return {
-      labels: ["Wins", "Losses"],
-      datasets: [
-        {
-          data: [wins, losses],
-          backgroundColor: ["#28a745", "#dc3545"],
-          borderWidth: 0,
-          cutout: "70%",
-        },
-      ],
-    };
-  }, [userStats]);
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      tooltip: {
-        callbacks: {
-          label: function (context) {
-            const label = context.label || "";
-            const value = context.parsed;
-            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percentage = ((value / total) * 100).toFixed(1);
-            return `${label}: ${value} (${percentage}%)`;
-          },
-        },
-      },
-    },
-  };
-
   if (loading) {
     return (
       <div
@@ -265,55 +223,7 @@ const Dashboard = () => {
             <Row className="g-4 mb-4">
               {/* Win/Loss Ratio Card */}
               <Col lg={4}>
-                <Card className="text-center stat-card h-100">
-                  <Card.Header>
-                    <h5 className="mb-0">Win/Loss Ratio</h5>
-                  </Card.Header>
-                  <Card.Body>
-                    {chartData ? (
-                      <div>
-                        <div style={{ height: "200px", position: "relative" }}>
-                          <Doughnut data={chartData} options={chartOptions} />
-                          <div className="position-absolute top-50 start-50 translate-middle text-center">
-                            <div className="h4 mb-0 text-primary">
-                              {(
-                                (userStats.totalWins /
-                                  (userStats.totalWins +
-                                    userStats.totalLosses)) *
-                                100
-                              ).toFixed(1)}
-                              %
-                            </div>
-                            <small className="text-muted">Win Rate</small>
-                          </div>
-                        </div>
-                        <Row className="mt-3">
-                          <Col xs={6}>
-                            <div className="text-success">
-                              <strong>{userStats.totalWins}</strong>
-                              <br />
-                              <small>Wins</small>
-                            </div>
-                          </Col>
-                          <Col xs={6}>
-                            <div className="text-danger">
-                              <strong>{userStats.totalLosses}</strong>
-                              <br />
-                              <small>Losses</small>
-                            </div>
-                          </Col>
-                        </Row>
-                      </div>
-                    ) : (
-                      <div className="py-4">
-                        <i className="bi bi-pie-chart fs-1 text-muted d-block mb-2"></i>
-                        <p className="text-muted mb-0">
-                          No match data available
-                        </p>
-                      </div>
-                    )}
-                  </Card.Body>
-                </Card>
+                <WinLossRatio />
               </Col>
 
               {/* NEW: Recent Matches Card - Using Redux Component */}
@@ -324,7 +234,6 @@ const Dashboard = () => {
               {/* Achievements Card */}
               <Col lg={4}>
                 <AchievementsCard playerStats={userStats} isLoading={loading} />
-
               </Col>
             </Row>
 
