@@ -8,7 +8,7 @@ const router = express.Router();
  * Get player statistics
  * GET /api/stats/:playerId
  */
-router.get('/:playerId', async (req, res) => {
+router.get('/player/:playerId', async (req, res) => {
     try {
         const { playerId } = req.params;
         
@@ -39,7 +39,7 @@ router.get('/:playerId', async (req, res) => {
  * Sync player statistics
  * POST /api/stats/:playerId/sync
  */
-router.post('/:playerId/sync', async (req, res) => {
+router.post('/player/:playerId/sync', async (req, res) => {
     try {
         const { playerId } = req.params;
         

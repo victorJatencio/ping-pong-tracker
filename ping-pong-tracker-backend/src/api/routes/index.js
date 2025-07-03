@@ -7,6 +7,7 @@ const notificationRoutes = require('./notification.routes');
 
 const router = express.Router();
 
+
 // API version and health check
 router.get('/', (req, res) => {
     res.json({
