@@ -26,6 +26,8 @@ import RecentMatchesCard from "../../components/dashboard/RecentMatchesCard";
 import PendingInvitationsCard from '../../components/dashboard/PendingInvitationsCard';
 // Import Achievements Card
 import AchievementsCard from "../../components/dashboard/AchievementsCard";
+// Import Leaderboard Preview Card
+import LeaderboardPreview from '../../components/dashboard/LeaderboardPreview';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -339,17 +341,7 @@ const Dashboard = () => {
 
               {/* Placeholder for other cards */}
               <Col lg={4}>
-                <Card className="h-100">
-                  <Card.Header>
-                    <h5 className="mb-0">Coming Soon</h5>
-                  </Card.Header>
-                  <Card.Body className="text-center py-5">
-                    <i className="bi bi-gear fs-1 text-muted d-block mb-2"></i>
-                    <p className="text-muted mb-0">
-                      More dashboard components coming soon
-                    </p>
-                  </Card.Body>
-                </Card>
+                <LeaderboardPreview />
               </Col>
             </Row>
           </Row>

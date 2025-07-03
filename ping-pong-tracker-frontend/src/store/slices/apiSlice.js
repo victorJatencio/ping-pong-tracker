@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../config/firebase";
 
-// Firebase base query (keep existing functionality)
+// Firebase base query (for existing Firebase functionality)
 const firebaseBaseQuery = () => async (args) => {
   try {
     if (args.collection && args.queryConstraints) {
@@ -62,7 +62,7 @@ const firebaseBaseQuery = () => async (args) => {
   }
 };
 
-// Backend API base query (new)
+// Backend API base query (for new backend endpoints)
 const backendBaseQuery = fetchBaseQuery({
   baseUrl: 'http://localhost:5000/api',
   prepareHeaders: (headers) => {
@@ -71,11 +71,10 @@ const backendBaseQuery = fetchBaseQuery({
   },
 });
 
-// Create separate API slices for different base queries
 export const apiSlice = createApi({
   reducerPath: "api",
   baseQuery: firebaseBaseQuery(), // Default to Firebase for existing queries
-  tagTypes: ["Match", "User", "Invitation", "PlayerStats", "BackendPlayerStats"],
+  tagTypes: ["Match", "User", "Invitation", "PlayerStats", "BackendPlayerStats", "Leaderboard"],
   endpoints: (builder) => ({
     // ========================================
     // EXISTING FIREBASE ENDPOINTS (Keep as-is)
@@ -308,72 +307,183 @@ export const apiSlice = createApi({
         }
       },
     }),
-  }),
-});
 
-// Create separate backend API slice
-export const backendApiSlice = createApi({
-  reducerPath: "backendApi",
-  baseQuery: backendBaseQuery,
-  tagTypes: ["BackendPlayerStats"],
-  endpoints: (builder) => ({
+    // ========================================
+    // NEW BACKEND API ENDPOINTS
+    // ========================================
+    
     // Get player stats from backend (synced data)
     getPlayerStatsFromBackend: builder.query({
-      query: (userId) => `stats/player/${userId}`,
+      queryFn: async (userId, api, extraOptions) => {
+        try {
+          console.log("🔍 getPlayerStatsFromBackend - calling backend API for userId:", userId);
+          
+          const result = await backendBaseQuery(
+            {
+              url: `stats/player/${userId}`,
+              method: 'GET',
+            },
+            api,
+            extraOptions
+          );
+
+          console.log("🔍 Backend API result:", result);
+
+          if (result.error) {
+            console.error("Backend API error:", result.error);
+            return result;
+          }
+
+          if (result.data && result.data.success && result.data.data) {
+            console.log("✅ Backend stats data:", result.data.data);
+            return { data: result.data.data };
+          }
+
+          // Fallback for empty response
+          console.warn("⚠️ No stats found, returning defaults");
+          return {
+            data: {
+              totalWins: 0,
+              winStreak: 0,
+              maxWinStreak: 0,
+              gamesPlayed: 0,
+              totalLosses: 0,
+              playerId: userId
+            }
+          };
+
+        } catch (error) {
+          console.error("getPlayerStatsFromBackend error:", error);
+          return {
+            error: {
+              status: 'FETCH_ERROR',
+              error: error.message
+            }
+          };
+        }
+      },
       providesTags: (result, error, userId) => [
         { type: "BackendPlayerStats", id: userId },
       ],
-      transformResponse: (response) => {
-        console.log("🔍 getPlayerStatsFromBackend Debug:");
-        console.log("  - Raw backend response:", response);
-        
-        // Backend returns the stats object directly
-        if (response && response.success && response.data) {
-          console.log("  - Transformed stats:", response.data);
-          return response.data;
+    }),
+
+    // Get leaderboard preview (top 3 players)
+    getLeaderboardPreview: builder.query({
+      queryFn: async (arg, api, extraOptions) => {
+        try {
+          console.log("🔍 getLeaderboardPreview - calling backend API");
+          
+          const result = await backendBaseQuery(
+            {
+              url: 'stats/leaderboard/preview',
+              method: 'GET',
+            },
+            api,
+            extraOptions
+          );
+
+          console.log("🔍 Leaderboard API result:", result);
+
+          if (result.error) {
+            console.error("Leaderboard API error:", result.error);
+            return result;
+          }
+
+          if (result.data && result.data.success && result.data.data) {
+            console.log("✅ Leaderboard data:", result.data.data);
+            return { data: result.data.data };
+          }
+
+          // Fallback for empty response
+          console.warn("⚠️ No leaderboard data found, returning empty array");
+          return { data: [] };
+
+        } catch (error) {
+          console.error("getLeaderboardPreview error:", error);
+          return {
+            error: {
+              status: 'FETCH_ERROR',
+              error: error.message
+            }
+          };
         }
-        
-        // Fallback for empty or error response
-        console.warn("  - No stats found, returning defaults");
-        return {
-          totalWins: 0,
-          winStreak: 0,
-          maxWinStreak: 0,
-          gamesPlayed: 0,
-          totalLosses: 0,
-          userId: userId
-        };
       },
-      transformErrorResponse: (response) => {
-        console.error("Backend playerStats error:", response);
-        return {
-          status: response.status,
-          message: response.data?.message || 'Failed to fetch player stats'
-        };
-      },
+      providesTags: ["Leaderboard"],
     }),
 
     // Sync player stats (trigger backend sync)
     syncPlayerStats: builder.mutation({
-      query: (userId) => ({
-        url: `stats/sync/${userId}`,
-        method: 'POST',
-      }),
+      queryFn: async (userId, api, extraOptions) => {
+        try {
+          console.log("🔍 syncPlayerStats - calling backend API for userId:", userId);
+          
+          const result = await backendBaseQuery(
+            {
+              url: `stats/player/${userId}/sync`,
+              method: 'POST',
+            },
+            api,
+            extraOptions
+          );
+
+          console.log("🔍 Sync API result:", result);
+          return result;
+
+        } catch (error) {
+          console.error("syncPlayerStats error:", error);
+          return {
+            error: {
+              status: 'FETCH_ERROR',
+              error: error.message
+            }
+          };
+        }
+      },
       invalidatesTags: (result, error, userId) => [
         { type: "BackendPlayerStats", id: userId },
+        { type: "PlayerStats", id: userId },
+        { type: "Leaderboard" }, // Invalidate leaderboard when stats change
       ],
     }),
 
     // Get all player stats (for leaderboards, etc.)
     getAllPlayerStatsFromBackend: builder.query({
-      query: () => 'stats/players',
-      providesTags: ["BackendPlayerStats"],
-      transformResponse: (response) => {
-        if (response && response.success && response.data) {
-          return response.data;
+      queryFn: async (arg, api, extraOptions) => {
+        try {
+          console.log("🔍 getAllPlayerStatsFromBackend - calling backend API");
+          
+          const result = await backendBaseQuery(
+            {
+              url: 'stats/players',
+              method: 'GET',
+            },
+            api,
+            extraOptions
+          );
+
+          console.log("🔍 All stats API result:", result);
+
+          if (result.error) {
+            return result;
+          }
+
+          if (result.data && result.data.success && result.data.data) {
+            return { data: result.data.data };
+          }
+
+          return { data: [] };
+
+        } catch (error) {
+          console.error("getAllPlayerStatsFromBackend error:", error);
+          return {
+            error: {
+              status: 'FETCH_ERROR',
+              error: error.message
+            }
+          };
         }
-        return [];
       },
+      providesTags: ["BackendPlayerStats"],
     }),
   }),
 });
@@ -386,12 +496,11 @@ export const {
   useGetPlayerStatsQuery,
   useAcceptInvitationMutation,
   useDeclineInvitationMutation,
-} = apiSlice;
-
-export const {
+  
   // New Backend API hooks
   useGetPlayerStatsFromBackendQuery,
+  useGetLeaderboardPreviewQuery,
   useSyncPlayerStatsMutation,
   useGetAllPlayerStatsFromBackendQuery,
-} = backendApiSlice;
+} = apiSlice;
 

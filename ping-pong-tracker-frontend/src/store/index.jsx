@@ -1,5 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
-import { apiSlice, backendApiSlice } from "./slices/apiSlice";
+import { apiSlice } from "./slices/apiSlice";
 import uiReducer from "./slices/uiSlice";
 // import authReducer from "./slices/authSlice";
 // import matchesReducer from "./slices/matchesSlice";
@@ -9,7 +9,6 @@ export const store = configureStore({
   reducer: {
     // RTK Query API slices
     api: apiSlice.reducer,
-    backendApi: backendApiSlice.reducer, // Add the backend API slice
     ui: uiReducer,
   },
 
@@ -34,10 +33,6 @@ export const store = configureStore({
           "api.mutations",
           "api.provided",
           "api.subscriptions",
-          "backendApi.queries",
-          "backendApi.mutations",
-          "backendApi.provided",
-          "backendApi.subscriptions",
           "payload.createdAt",
           "payload.updatedAt",
           "payload.acceptedAt",
@@ -57,8 +52,7 @@ export const store = configureStore({
         ignoredPaths: ["api", "backendApi"],
       },
     })
-    .concat(apiSlice.middleware)
-    .concat(backendApiSlice.middleware), // Add backend API middleware
+    .concat(apiSlice.middleware),
 
   devTools: process.env.NODE_ENV !== "production",
 });
