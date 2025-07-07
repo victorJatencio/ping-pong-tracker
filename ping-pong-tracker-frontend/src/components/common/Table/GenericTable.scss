@@ -1,0 +1,54 @@
+.generic-table-container {
+  width: 100%;
+  overflow-x: auto; // Allows horizontal scrolling on small screens
+  border-radius: 8px;
+  // background-color: var(--card-background-color, #fff); // Example if you want table background
+}
+
+.generic-table {
+  width: 100%;
+  border-collapse: collapse; // Removes space between borders
+  font-size: 0.9rem;
+  text-align: left;
+
+  th, td {
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--border-color, #eee); // Light border for rows
+  }
+
+  th {
+    background-color: var(--table-header-bg, #f8f8f8); // Light background for headers
+    color: var(--text-color-light, #666);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  tbody tr {
+    &:hover {
+      background-color: var(--table-row-hover-bg, #f5f5f5); // Hover effect for rows
+    }
+    &:last-child {
+      td {
+        border-bottom: none; // No border for the last row
+      }
+    }
+  }
+
+  .generic-table-empty-state {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-color-light, #666);
+    font-style: italic;
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .generic-table {
+    font-size: 0.85rem;
+    th, td {
+      padding: 10px 12px;
+    }
+  }
+}

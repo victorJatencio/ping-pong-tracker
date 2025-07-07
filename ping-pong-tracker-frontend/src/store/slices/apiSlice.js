@@ -10,6 +10,8 @@ import {
   orderBy,
   limit,
   serverTimestamp,
+  or,
+  and,
 } from "firebase/firestore";
 import { db } from "../../config/firebase";
 
@@ -169,6 +171,7 @@ export const apiSlice = createApi({
       },
     }),
 
+    // MODIFIED: getRecentMatches to use 'or' operator and filter by 'completedDate' and 'status'
     getRecentMatches: builder.query({
       queryFn: async (userId) => {
         try {
@@ -182,59 +185,31 @@ export const apiSlice = createApi({
           console.log("🔍 getRecentMatches Debug:");
           console.log("  - Querying for userId:", userId);
 
-          // Query for matches where user is either player1 or player2
-          const q1 = query(
-            collection(db, "matches"),
-            where("player1Id", "==", userId),
-            orderBy("date", "desc"),
-            limit(10)
+          const matchesRef = collection(db, "matches");
+          const q = query(
+            matchesRef,
+            and(
+              or(
+                // Use the new OR operator for player IDs
+                where("player1Id", "==", userId),
+                where("player2Id", "==", userId)
+              ),
+              where("status", "==", "completed") // Only completed matches
+            ),
+            orderBy("completedDate", "desc"), // Order by most recent completedDate
+            limit(5) // Limit to 5 for the dashboard card
           );
 
-          const q2 = query(
-            collection(db, "matches"),
-            where("player2Id", "==", userId),
-            orderBy("date", "desc"),
-            limit(10)
-          );
-
-          // Execute both queries
-          const [snapshot1, snapshot2] = await Promise.all([
-            getDocs(q1),
-            getDocs(q2),
-          ]);
-
-          // Combine results
-          const matches1 = snapshot1.docs.map((doc) => ({
+          const querySnapshot = await getDocs(q);
+          const matches = querySnapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
           }));
 
-          const matches2 = snapshot2.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-
-          // Merge and deduplicate matches
-          const allUserMatches = [...matches1, ...matches2];
-          const uniqueMatches = allUserMatches.filter(
-            (match, index, self) =>
-              index === self.findIndex((m) => m.id === match.id)
-          );
-
-          // Sort by date and limit to 5 most recent
-          const sortedMatches = uniqueMatches
-            .sort((a, b) => {
-              const dateA = a.date?.toDate ? a.date.toDate() : new Date(a.date);
-              const dateB = b.date?.toDate ? b.date.toDate() : new Date(b.date);
-              return dateB - dateA; // Most recent first
-            })
-            .slice(0, 5);
-
-          console.log("  - Total user matches found:", uniqueMatches.length);
-          console.log("  - Recent matches (top 5):", sortedMatches.length);
+          console.log("  - Recent matches found:", matches.length);
 
           // Convert Firebase Timestamps to ISO strings for Redux
-          const serializedMatches = convertTimestamps(sortedMatches);
+          const serializedMatches = convertTimestamps(matches);
           return { data: serializedMatches };
         } catch (error) {
           console.error("❌ getRecentMatches error:", error);
@@ -335,8 +310,6 @@ export const apiSlice = createApi({
           console.error("❌ acceptInvitation error:", error);
           return { error: { status: "FIREBASE_ERROR", error: error.message } };
         }
-
-        
       },
       async onQueryStarted(
         { invitationId, currentUserId },
@@ -620,7 +593,7 @@ export const apiSlice = createApi({
 export const {
   // Existing Firebase hooks
   useGetAllUsersQuery,
-  useGetRecentMatchesQuery,
+  useGetRecentMatchesQuery, // This hook is now updated
   useGetPendingInvitationsQuery,
   useGetPlayerStatsQuery,
   useAcceptInvitationMutation,

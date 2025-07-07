@@ -30,6 +30,8 @@ import AchievementsCard from "../../components/dashboard/AchievementsCard";
 import LeaderboardPreview from '../../components/dashboard/LeaderboardPreview';
 // Import Win/Loss Ratio Card
 import WinLossRatio from "../../components/dashboard/WinLossRatio";
+// Import Table Card
+import RecentActivityCard from '../../components/dashboard/RecentActivityCard';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -251,6 +253,11 @@ const Dashboard = () => {
               {/* Placeholder for other cards */}
               <Col lg={4}>
                 <LeaderboardPreview />
+              </Col>
+            </Row>
+            <Row className="g-4">
+              <Col lg={12}>
+                 <RecentActivityCard />
               </Col>
             </Row>
           </Row>

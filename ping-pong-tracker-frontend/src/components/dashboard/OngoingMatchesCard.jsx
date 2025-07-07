@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { db } from '../../config/firebase';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { openMatchCreationModal } from '../../store/slices/uiSlice';
-import UpdateScoreModal from './UpdateScoreModal';
+import UpdateScoreModal from '../match/MatchCreate/UpdatedScoreModal';
 
 /**
  * Updated OngoingMatches component that properly passes data to the modal
