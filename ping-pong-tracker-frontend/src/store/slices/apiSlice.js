@@ -409,6 +409,136 @@ export const apiSlice = createApi({
     }),
 
     // ========================================
+    // FILTERS API ENDPOINTS
+    // ========================================
+    getFilteredMatches: builder.query({
+      async queryFn(filters) {
+        try {
+          console.log("🔍 getFilteredMatches Debug: Received filters:", filters);
+
+          const {
+            userId, // The current logged-in user ID (now optional for "Show All Matches")
+            opponentId, // Specific opponent ID to filter by
+            status, // "completed", "scheduled", "in-progress"
+            result, // "won", "lost" (relative to userId)
+            startDate, // ISO string
+            endDate, // ISO string
+            page = 1, // For pagination
+            pageSize = 10, // For pagination
+          } = filters;
+
+          const matchesRef = collection(db, "matches");
+          let queryConstraints = [];
+
+          // 1. Player Filter (userId and/or opponentId)
+          let playerConditions = [];
+          
+          if (userId) { 
+            // ONLY apply this if userId is provided (i.e., not showing all matches)
+            playerConditions.push(where("player1Id", "==", userId));
+            playerConditions.push(where("player2Id", "==", userId));
+          }
+          
+          if (opponentId) {
+            // If filtering by a specific opponent, ensure the current user is also involved
+            // This logic needs to be careful if userId is NOT present (i.e., showAllMatches is true)
+            if (userId) { 
+              // If userId is present, filter by opponent AND current user
+              playerConditions = [
+                and(where("player1Id", "==", userId), where("player2Id", "==", opponentId)),
+                and(where("player1Id", "==", opponentId), where("player2Id", "==", userId)),
+              ];
+            } else { 
+              // If no userId (showAllMatches is true), just filter by opponent
+              playerConditions = [
+                where("player1Id", "==", opponentId),
+                where("player2Id", "==", opponentId),
+              ];
+            }
+          }
+
+          if (playerConditions.length > 0) {
+            if (playerConditions.length === 1) {
+              queryConstraints.push(playerConditions[0]);
+            } else {
+              queryConstraints.push(or(...playerConditions));
+            }
+          } else if (!userId && !opponentId) {
+            // If no specific user or opponent is selected AND userId is not provided (showAllMatches is true),
+            // then we want ALL matches. No player conditions needed.
+          } else if (userId && !opponentId) {
+            // If userId is provided but no specific opponent, ensure we filter by current user's matches
+            // This case is handled by the initial 'if (userId)' block
+          }
+
+          // 2. Status Filter
+          if (status && status !== "all") {
+            queryConstraints.push(where("status", "==", status));
+          }
+
+          // 3. Date Range Filter
+          if (startDate) {
+            const startTimestamp = new Date(startDate);
+            queryConstraints.push(where("completedDate", ">=", startTimestamp));
+          }
+          if (endDate) {
+            const endTimestamp = new Date(endDate);
+            // To include the entire end day, set time to end of day
+            endTimestamp.setHours(23, 59, 59, 999);
+            queryConstraints.push(where("completedDate", "<=", endTimestamp));
+          }
+
+          // Combine all top-level constraints with 'and' if necessary
+          let finalQueryConstraints = [];
+          if (queryConstraints.length > 1) {
+            finalQueryConstraints.push(and(...queryConstraints));
+          } else if (queryConstraints.length === 1) {
+            finalQueryConstraints.push(queryConstraints[0]);
+          }
+
+          // Ordering and Pagination
+          finalQueryConstraints.push(orderBy("completedDate", "desc")); // Always order by date
+
+          // Firestore pagination: startAt/startAfter with limit
+          // For simplicity, we'll fetch more than pageSize and slice client-side for now
+          // Or implement proper cursor-based pagination later
+          finalQueryConstraints.push(limit(pageSize * page)); // Fetch enough for current page
+
+          const q = query(matchesRef, ...finalQueryConstraints);
+          const querySnapshot = await getDocs(q);
+          const documents = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+
+          // Apply client-side filtering for 'result'
+          let filteredMatches = documents;
+
+          // Filter by 'result' (won/lost) - this must be client-side as it depends on currentUserId
+          if (userId && result && (result === "won" || result === "lost")) {
+            filteredMatches = filteredMatches.filter((match) => {
+              const isWinner = match.winnerId === userId;
+              return (result === "won" && isWinner) || (result === "lost" && !isWinner);
+            });
+          }
+
+          // Apply client-side pagination (slice to current page's data)
+          const startIndex = (page - 1) * pageSize;
+          const paginatedMatches = filteredMatches.slice(startIndex, startIndex + pageSize);
+
+          console.log("Fetched filtered matches:", paginatedMatches.length, "out of", filteredMatches.length);
+          const serializedMatches = convertTimestamps(paginatedMatches);
+          return { data: serializedMatches };
+
+        } catch (error) {
+          console.error("❌ getFilteredMatches error:", error);
+          return { error: { status: "FIREBASE_ERROR", error: error.message } };
+        }
+      },
+      providesTags: ["Match"], // Invalidate when matches change
+    }),
+
+    // ========================================
     // NEW BACKEND API ENDPOINTS
     // ========================================
 
@@ -598,6 +728,7 @@ export const {
   useGetPlayerStatsQuery,
   useAcceptInvitationMutation,
   useDeclineInvitationMutation,
+  useGetFilteredMatchesQuery,
 
   // New Backend API hooks
   useGetPlayerStatsFromBackendQuery,
