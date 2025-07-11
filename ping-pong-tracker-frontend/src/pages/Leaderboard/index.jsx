@@ -17,6 +17,10 @@ import {
 // import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 // import statsService from '../../services/statsService';
 import Jumbotron from "../../components/common/Jumbotron";
+import TotalPlayersCard from "../../components/leaderboard/TotalPlayerCard";
+import YourRankCard from "../../components/leaderboard/YourRankCard";
+import TopPlayerCard from "../../components/leaderboard/TopPlayerCard";
+import HallOfFameCard from "../../components/leaderboard/HallOfFameCard";
 import PlayerRankingsCard from "../../components/leaderboard/PlayerRankingsCard";
 // import UserAvatar from '../../components/common/UserAvatar';
 
@@ -39,12 +43,22 @@ const Leaderboard = () => {
       <div className="jumbotron-overlap-container">
         <Container className="py-5">
           <Row>
-            <Col lg={12}>
-              <PlayerRankingsCard />
+            <Col lg={4}>
+              <TotalPlayersCard />
+            </Col>
+            <Col lg={4}>
+              <YourRankCard />
+            </Col>
+            <Col lg={4}>
+            <TopPlayerCard/>
             </Col>
           </Row>
           <Row>
-            <Col>
+            <Col lg={6}>
+              <PlayerRankingsCard />
+            </Col>
+            <Col lg={6}>
+            <HallOfFameCard/>
             </Col>
           </Row>
         </Container>
