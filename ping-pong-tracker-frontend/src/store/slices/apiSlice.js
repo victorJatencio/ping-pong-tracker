@@ -414,7 +414,10 @@ export const apiSlice = createApi({
     getFilteredMatches: builder.query({
       async queryFn(filters) {
         try {
-          console.log("🔍 getFilteredMatches Debug: Received filters:", filters);
+          console.log(
+            "🔍 getFilteredMatches Debug: Received filters:",
+            filters
+          );
 
           const {
             userId, // The current logged-in user ID (now optional for "Show All Matches")
@@ -432,23 +435,29 @@ export const apiSlice = createApi({
 
           // 1. Player Filter (userId and/or opponentId)
           let playerConditions = [];
-          
-          if (userId) { 
+
+          if (userId) {
             // ONLY apply this if userId is provided (i.e., not showing all matches)
             playerConditions.push(where("player1Id", "==", userId));
             playerConditions.push(where("player2Id", "==", userId));
           }
-          
+
           if (opponentId) {
             // If filtering by a specific opponent, ensure the current user is also involved
             // This logic needs to be careful if userId is NOT present (i.e., showAllMatches is true)
-            if (userId) { 
+            if (userId) {
               // If userId is present, filter by opponent AND current user
               playerConditions = [
-                and(where("player1Id", "==", userId), where("player2Id", "==", opponentId)),
-                and(where("player1Id", "==", opponentId), where("player2Id", "==", userId)),
+                and(
+                  where("player1Id", "==", userId),
+                  where("player2Id", "==", opponentId)
+                ),
+                and(
+                  where("player1Id", "==", opponentId),
+                  where("player2Id", "==", userId)
+                ),
               ];
-            } else { 
+            } else {
               // If no userId (showAllMatches is true), just filter by opponent
               playerConditions = [
                 where("player1Id", "==", opponentId),
@@ -518,18 +527,28 @@ export const apiSlice = createApi({
           if (userId && result && (result === "won" || result === "lost")) {
             filteredMatches = filteredMatches.filter((match) => {
               const isWinner = match.winnerId === userId;
-              return (result === "won" && isWinner) || (result === "lost" && !isWinner);
+              return (
+                (result === "won" && isWinner) ||
+                (result === "lost" && !isWinner)
+              );
             });
           }
 
           // Apply client-side pagination (slice to current page's data)
           const startIndex = (page - 1) * pageSize;
-          const paginatedMatches = filteredMatches.slice(startIndex, startIndex + pageSize);
+          const paginatedMatches = filteredMatches.slice(
+            startIndex,
+            startIndex + pageSize
+          );
 
-          console.log("Fetched filtered matches:", paginatedMatches.length, "out of", filteredMatches.length);
+          console.log(
+            "Fetched filtered matches:",
+            paginatedMatches.length,
+            "out of",
+            filteredMatches.length
+          );
           const serializedMatches = convertTimestamps(paginatedMatches);
           return { data: serializedMatches };
-
         } catch (error) {
           console.error("❌ getFilteredMatches error:", error);
           return { error: { status: "FIREBASE_ERROR", error: error.message } };
@@ -642,6 +661,153 @@ export const apiSlice = createApi({
       providesTags: ["Leaderboard"],
     }),
 
+    getLeaderboardData: builder.query({
+      queryFn: async ({ filters = {}, pagination = {} }) => {
+        try {
+          console.log("🔍 getLeaderboardData called with:", {
+            filters,
+            pagination,
+          });
+
+          const {
+            search = "",
+            winRateMin = 0,
+            winRateMax = 100,
+            matchesMin = 0,
+            streakMin = 0,
+            timePeriod = "all-time",
+            sortBy = "rank",
+            sortOrder = "asc",
+          } = filters;
+
+          const { page = 1, pageSize = 10 } = pagination;
+
+          // Fetch all playerStats documents
+          const leaderboardQuery = collection(db, "playerStats");
+          const snapshot = await getDocs(leaderboardQuery);
+          const leaderboardData = [];
+
+          console.log("📊 Raw playerStats documents:", snapshot.docs.length);
+
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+
+            // Apply client-side filtering
+            const playerWinRate = data.winRate || 0; // Already in 0-100 format
+            const playerMatches = data.gamesPlayed || 0;
+            const playerStreak = data.currentStreak || 0;
+
+            // Filter by matches minimum
+            if (matchesMin > 0 && playerMatches < matchesMin) {
+              return;
+            }
+
+            // Filter by win rate range
+            if (playerWinRate < winRateMin || playerWinRate > winRateMax) {
+              return;
+            }
+
+            // Filter by streak minimum
+            if (streakMin > 0 && playerStreak < streakMin) {
+              return;
+            }
+
+            leaderboardData.push({
+              id: doc.id,
+              playerId: data.playerId || doc.id,
+              rank: 0, // We'll calculate this after sorting
+              displayName: "Loading...", // Will be filled from users collection
+              totalMatches: playerMatches,
+              wins: data.totalWins || 0,
+              losses: data.totalLosses || 0,
+              winRate: playerWinRate / 100, // Convert to 0-1 format for consistency
+              currentStreak: playerStreak,
+              longestStreak: data.maxWinStreak || 0,
+              score: data.rankingScore || 0,
+              photoURL: null, // Will be filled from users collection
+              lastActive: data.lastMatchDate || null,
+            });
+          });
+
+          // Sort the data
+          const sortField =
+            sortBy === "rank"
+              ? "score" // Use score for ranking
+              : sortBy === "winRate"
+              ? "winRate"
+              : sortBy === "matches"
+              ? "totalMatches"
+              : sortBy === "streak"
+              ? "currentStreak"
+              : "score";
+
+          leaderboardData.sort((a, b) => {
+            const aVal = a[sortField];
+            const bVal = b[sortField];
+
+            if (sortBy === "rank" || sortField === "score") {
+              // For ranking, higher score = better rank (descending)
+              return sortOrder === "asc" ? bVal - aVal : aVal - bVal;
+            } else {
+              // For other fields, normal sorting
+              return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
+            }
+          });
+
+          // Assign ranks after sorting
+          leaderboardData.forEach((player, index) => {
+            player.rank = index + 1;
+          });
+
+          // Apply search filter (after we get user names)
+          let filteredData = leaderboardData;
+          if (search.trim()) {
+            filteredData = leaderboardData.filter((player) =>
+              player.displayName.toLowerCase().includes(search.toLowerCase())
+            );
+          }
+
+          // Apply pagination
+          const startIndex = (page - 1) * pageSize;
+          const endIndex = startIndex + pageSize;
+          const paginatedData = filteredData.slice(startIndex, endIndex);
+
+          const totalCount = filteredData.length;
+          const totalPages = Math.ceil(totalCount / pageSize);
+
+          console.log("✅ getLeaderboardData success:", {
+            totalDocuments: snapshot.docs.length,
+            filteredCount: filteredData.length,
+            paginatedCount: paginatedData.length,
+            currentPage: page,
+          });
+
+          return {
+            data: {
+              leaderboard: paginatedData,
+              pagination: {
+                currentPage: page,
+                pageSize,
+                totalCount,
+                totalPages,
+                hasNextPage: page < totalPages,
+                hasPreviousPage: page > 1,
+              },
+            },
+          };
+        } catch (error) {
+          console.error("❌ getLeaderboardData error:", error);
+          return {
+            error: {
+              status: "FIREBASE_ERROR",
+              error: error.message,
+            },
+          };
+        }
+      },
+      providesTags: ["Leaderboard"],
+    }),
+
     // Sync player stats (trigger backend sync)
     syncPlayerStats: builder.mutation({
       queryFn: async (userId, api, extraOptions) => {
@@ -735,4 +901,5 @@ export const {
   useGetLeaderboardPreviewQuery,
   useSyncPlayerStatsMutation,
   useGetAllPlayerStatsFromBackendQuery,
+  useGetLeaderboardDataQuery,
 } = apiSlice;
