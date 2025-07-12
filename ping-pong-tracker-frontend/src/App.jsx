@@ -11,6 +11,23 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import 'react-toastify/dist/ReactToastify.css';
 import ModalManager from './components/common/ModalManagement'; 
 
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale
+} from 'chart.js';
+
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale
+);
+
 
 
 // A separate component that uses useRoutes

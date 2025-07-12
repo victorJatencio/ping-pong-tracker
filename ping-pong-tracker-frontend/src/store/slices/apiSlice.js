@@ -883,6 +883,135 @@ export const apiSlice = createApi({
       },
       providesTags: ["BackendPlayerStats"],
     }),
+
+    getUserMatchHistory: builder.query({
+      queryFn: async ({ userId, filters = {}, pagination = {} }) => {
+        try {
+          console.log("🔍 getUserMatchHistory called with:", {
+            userId,
+            filters,
+            pagination,
+          });
+
+          const {
+            result = "all", // 'won', 'lost', 'all'
+            startDate = null,
+            endDate = null,
+            sortBy = "date",
+            sortOrder = "desc",
+          } = filters;
+
+          const { page = 1, pageSize = 10 } = pagination;
+
+          if (!userId) {
+            throw new Error("User ID is required");
+          }
+
+          // Build the base query for user's matches
+          let matchQuery = collection(db, "matches");
+
+          // Create conditions array for filtering
+          const conditions = [];
+
+          // User participation condition (player1 OR player2)
+          const userCondition = or(
+            where("player1Id", "==", userId),
+            where("player2Id", "==", userId)
+          );
+          conditions.push(userCondition);
+
+          // Only completed matches
+          conditions.push(where("status", "==", "completed"));
+
+          // Date range filtering
+          if (startDate) {
+            conditions.push(where("completedDate", ">=", startDate));
+          }
+          if (endDate) {
+            conditions.push(where("completedDate", "<=", endDate));
+          }
+
+          // Result filtering (won/lost)
+          if (result === "won") {
+            conditions.push(where("winnerId", "==", userId));
+          } else if (result === "lost") {
+            conditions.push(where("loserId", "==", userId));
+          }
+
+          // Combine all conditions with AND
+          if (conditions.length > 1) {
+            matchQuery = query(matchQuery, and(...conditions));
+          } else {
+            matchQuery = query(matchQuery, conditions[0]);
+          }
+
+          // Add ordering
+          const orderField = sortBy === "date" ? "completedDate" : sortBy;
+          matchQuery = query(matchQuery, orderBy(orderField, sortOrder));
+
+          console.log("🔍 Executing match history query...");
+          const snapshot = await getDocs(matchQuery);
+
+          console.log(
+            `✅ Found ${snapshot.docs.length} matches for user ${userId}`
+          );
+
+          // Process the matches
+          const allMatches = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            // Ensure dates are properly formatted
+            completedDate:
+              doc.data().completedDate?.toDate?.() || doc.data().completedDate,
+            createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
+            scheduledDate:
+              doc.data().scheduledDate?.toDate?.() || doc.data().scheduledDate,
+          }));
+
+          // Apply pagination
+          const startIndex = (page - 1) * pageSize;
+          const endIndex = startIndex + pageSize;
+          const paginatedMatches = allMatches.slice(startIndex, endIndex);
+
+          const totalCount = allMatches.length;
+          const totalPages = Math.ceil(totalCount / pageSize);
+
+          console.log("✅ getUserMatchHistory success:", {
+            totalMatches: totalCount,
+            currentPage: page,
+            pageSize,
+            totalPages,
+            returnedMatches: paginatedMatches.length,
+          });
+
+          return {
+            data: {
+              matches: paginatedMatches,
+              pagination: {
+                currentPage: page,
+                pageSize,
+                totalCount,
+                totalPages,
+                hasNextPage: page < totalPages,
+                hasPreviousPage: page > 1,
+              },
+            },
+          };
+        } catch (error) {
+          console.error("❌ getUserMatchHistory error:", error);
+          return {
+            error: {
+              status: "FIREBASE_ERROR",
+              error: error.message,
+            },
+          };
+        }
+      },
+      providesTags: (result, error, { userId }) => [
+        { type: "Match", id: "USER_HISTORY" },
+        { type: "Match", id: userId },
+      ],
+    }),
   }),
 });
 
@@ -902,4 +1031,5 @@ export const {
   useSyncPlayerStatsMutation,
   useGetAllPlayerStatsFromBackendQuery,
   useGetLeaderboardDataQuery,
+  useGetUserMatchHistoryQuery,
 } = apiSlice;
