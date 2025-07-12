@@ -1,6 +1,7 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import {
   getDocs,
+  getDoc,
   addDoc,
   doc,
   updateDoc,
@@ -13,7 +14,13 @@ import {
   or,
   and,
 } from "firebase/firestore";
-import { db } from "../../config/firebase";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
+import { db, storage } from "../../config/firebase";
 
 // Helper function to safely convert Firebase Timestamps to ISO strings
 const convertTimestamps = (obj) => {
@@ -137,6 +144,8 @@ export const apiSlice = createApi({
     "PlayerStats",
     "BackendPlayerStats",
     "Leaderboard",
+    "UserProfile",
+    "UserProfileStats", // Delete
   ],
   endpoints: (builder) => ({
     // ========================================
@@ -1012,6 +1021,255 @@ export const apiSlice = createApi({
         { type: "Match", id: userId },
       ],
     }),
+
+    // ========================================
+    // Profile API ENDPOINTS
+    // ========================================
+    getUserProfile: builder.query({
+      queryFn: async (userId) => {
+        try {
+          if (!userId) {
+            return {
+              error: { status: "INVALID_USER", error: "No user ID provided" },
+            };
+          }
+
+          console.log(
+            "🔍 getUserProfile - fetching profile for userId:",
+            userId
+          );
+
+          const userDocRef = doc(db, "users", userId);
+          const userDoc = await getDoc(userDocRef);
+
+          if (!userDoc.exists()) {
+            return {
+              error: { status: "USER_NOT_FOUND", error: "User not found" },
+            };
+          }
+
+          const userData = { id: userDoc.id, ...userDoc.data() };
+          const serializedData = convertTimestamps(userData);
+
+          console.log("✅ getUserProfile - profile data:", serializedData);
+          return { data: serializedData };
+        } catch (error) {
+          console.error("❌ getUserProfile error:", error);
+          return { error: { status: "FIREBASE_ERROR", error: error.message } };
+        }
+      },
+      providesTags: (result, error, userId) => [
+        { type: "UserProfile", id: userId },
+      ],
+    }),
+
+    updateUserProfile: builder.mutation({
+      queryFn: async ({ userId, profileData }) => {
+        try {
+          if (!userId) {
+            return {
+              error: { status: "INVALID_USER", error: "No user ID provided" },
+            };
+          }
+
+          console.log(
+            "🔍 updateUserProfile - updating profile for userId:",
+            userId
+          );
+          console.log("  - Profile data:", profileData);
+
+          const userDocRef = doc(db, "users", userId);
+          const updateData = {
+            ...profileData,
+            updatedAt: serverTimestamp(),
+          };
+
+          await updateDoc(userDocRef, updateData);
+
+          console.log("✅ updateUserProfile - profile updated successfully");
+          return { data: { success: true, userId } };
+        } catch (error) {
+          console.error("❌ updateUserProfile error:", error);
+          return { error: { status: "FIREBASE_ERROR", error: error.message } };
+        }
+      },
+      invalidatesTags: (result, error, { userId }) => [
+        { type: "UserProfile", id: userId },
+        { type: "User", id: "LIST" },
+      ],
+    }),
+
+    getUserProfileStats: builder.query({
+      queryFn: async (userId, api, extraOptions) => {
+        try {
+          if (!userId) {
+            return {
+              error: { status: "INVALID_USER", error: "No user ID provided" },
+            };
+          }
+
+          console.log(
+            "🔍 getUserProfileStats - fetching stats for userId:",
+            userId
+          );
+
+          // Use the existing backend API for consistency
+          const result = await backendBaseQuery(
+            {
+              url: `stats/player/${userId}`,
+              method: "GET",
+            },
+            api,
+            extraOptions
+          );
+
+          if (result.error) {
+            console.error("❌ Backend API error:", result.error);
+            return result;
+          }
+
+          if (result.data && result.data.success && result.data.data) {
+            console.log("✅ Profile stats data:", result.data.data);
+            return { data: result.data.data };
+          }
+
+          // Fallback for empty response
+          console.warn("⚠️ No profile stats found, returning defaults");
+          return {
+            data: {
+              totalWins: 0,
+              winStreak: 0,
+              maxWinStreak: 0,
+              gamesPlayed: 0,
+              totalLosses: 0,
+              playerId: userId,
+              winRate: 0,
+              rank: null,
+            },
+          };
+        } catch (error) {
+          console.error("❌ getUserProfileStats error:", error);
+          return {
+            error: {
+              status: "FETCH_ERROR",
+              error: error.message,
+            },
+          };
+        }
+      },
+      providesTags: (result, error, userId) => [
+        { type: "UserProfileStats", id: userId },
+      ],
+    }), // Delete
+
+    uploadProfileImage: builder.mutation({
+      queryFn: async ({ userId, imageFile }) => {
+        try {
+          if (!userId) {
+            return {
+              error: { status: "INVALID_USER", error: "No user ID provided" },
+            };
+          }
+
+          if (!imageFile) {
+            return {
+              error: {
+                status: "INVALID_FILE",
+                error: "No image file provided",
+              },
+            };
+          }
+
+          console.log(
+            "🔍 uploadProfileImage - uploading image for userId:",
+            userId
+          );
+          console.log("  - File:", imageFile.name, imageFile.size, "bytes");
+
+          // Create a reference to the user's profile image
+          const imageRef = ref(
+            storage,
+            `profile-images/${userId}/${Date.now()}_${imageFile.name}`
+          );
+
+          // Upload the file
+          const uploadResult = await uploadBytes(imageRef, imageFile);
+          console.log(
+            "✅ Image uploaded successfully:",
+            uploadResult.metadata.fullPath
+          );
+
+          // Get the download URL
+          const downloadURL = await getDownloadURL(uploadResult.ref);
+          console.log("✅ Download URL obtained:", downloadURL);
+
+          // Update the user's profile with the new photo URL
+          const userDocRef = doc(db, "users", userId);
+          await updateDoc(userDocRef, {
+            photoURL: downloadURL,
+            updatedAt: serverTimestamp(),
+          });
+
+          console.log("✅ User profile updated with new photo URL");
+
+          return {
+            data: {
+              photoURL: downloadURL,
+              success: true,
+              userId,
+            },
+          };
+        } catch (error) {
+          console.error("❌ uploadProfileImage error:", error);
+          return { error: { status: "UPLOAD_ERROR", error: error.message } };
+        }
+      },
+      invalidatesTags: (result, error, { userId }) => [
+        { type: "UserProfile", id: userId },
+        { type: "User", id: "LIST" },
+      ],
+    }),
+
+    removeProfileImage: builder.mutation({
+      queryFn: async ({ userId }) => {
+        try {
+          if (!userId) {
+            return {
+              error: { status: "INVALID_USER", error: "No user ID provided" },
+            };
+          }
+
+          console.log(
+            "🔍 removeProfileImage - removing image for userId:",
+            userId
+          );
+
+          // Update the user's profile to remove the photo URL
+          const userDocRef = doc(db, "users", userId);
+          await updateDoc(userDocRef, {
+            photoURL: null,
+            updatedAt: serverTimestamp(),
+          });
+
+          console.log("✅ Profile image removed successfully");
+
+          return {
+            data: {
+              success: true,
+              userId,
+            },
+          };
+        } catch (error) {
+          console.error("❌ removeProfileImage error:", error);
+          return { error: { status: "REMOVE_ERROR", error: error.message } };
+        }
+      },
+      invalidatesTags: (result, error, { userId }) => [
+        { type: "UserProfile", id: userId },
+        { type: "User", id: "LIST" },
+      ],
+    }),
+
   }),
 });
 
@@ -1032,4 +1290,11 @@ export const {
   useGetAllPlayerStatsFromBackendQuery,
   useGetLeaderboardDataQuery,
   useGetUserMatchHistoryQuery,
+
+  // Profile API hooks
+  useGetUserProfileQuery,
+  useUpdateUserProfileMutation,
+  useGetUserProfileStatsQuery, // Delete
+  useUploadProfileImageMutation,
+  useRemoveProfileImageMutation,
 } = apiSlice;
