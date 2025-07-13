@@ -56,18 +56,25 @@ const PendingInvitationsCard = () => {
 
   useEffect(() => {
     if (invitationsData && usersData) {
+      console.log("🔍 AVATAR DEBUG - Raw usersData sample:", Object.values(usersData)[0]);
+      
       const enriched = invitationsData.map((invitation) => {
         const sender = usersData[invitation.senderId];
+        console.log("🔍 AVATAR DEBUG - Sender data for", invitation.senderId, ":", sender);
+        
         return {
           ...invitation,
           sender: sender || {
             uid: invitation.senderId,
             displayName: "Unknown User",
-            profileImageUrl: null,
+            photoURL: null, // ✅ FIXED: Use photoURL instead of profileImageUrl
+            useDefaultAvatar: true, // ✅ FIXED: Add useDefaultAvatar flag
             email: `user-${invitation.senderId}@example.com`, // Fallback for avatar generation
           },
         };
       });
+      
+      console.log("🔍 AVATAR DEBUG - Enriched invitations:", enriched);
       setEnrichedInvitations(enriched);
     }
   }, [invitationsData, usersData]);
@@ -273,37 +280,45 @@ const PendingInvitationsCard = () => {
 
         {enrichedInvitations.length > 0 ? (
           <div className="pending-invitations-list">
-            {enrichedInvitations.slice(0, 3).map((invitation) => (
-              <div
-                key={invitation.id}
-                className={`pending-invitation-preview ${
-                  removingId === invitation.id ? "removing" : ""
-                }`}
-                onClick={() => openInvitationModal(invitation)}
-              >
-                <div className="invitation-sender">
-                  <div className="sender-avatar">
-                    <UserAvatar
-                      user={{
-                        profileImage: invitation.sender.profileImageUrl,
-                        displayName: invitation.sender.displayName,
-                        email: invitation.sender.email,
-                      }}
-                      size="small"
-                    />
+            {enrichedInvitations.slice(0, 3).map((invitation) => {
+              // ✅ FIXED: Create proper avatar data with useDefaultAvatar logic
+              const avatarData = {
+                photoURL: (!invitation.sender.useDefaultAvatar && invitation.sender.photoURL) ? invitation.sender.photoURL : null,
+                displayName: invitation.sender.displayName,
+                email: invitation.sender.email,
+              };
+              
+              console.log("🔍 AVATAR DEBUG - Avatar data being passed to UserAvatar:", avatarData);
+              
+              return (
+                <div
+                  key={invitation.id}
+                  className={`pending-invitation-preview ${
+                    removingId === invitation.id ? "removing" : ""
+                  }`}
+                  onClick={() => openInvitationModal(invitation)}
+                >
+                  <div className="invitation-sender">
+                    <div className="sender-avatar">
+                      {/* ✅ FIXED: Use photoURL field instead of profileImage */}
+                      <UserAvatar
+                        user={avatarData}
+                        size="small"
+                      />
+                    </div>
+                    <div className="sender-info">
+                      <span className="from-label">From</span>
+                      <span className="sender-name">
+                        {invitation.sender.displayName}
+                      </span>
+                    </div>
                   </div>
-                  <div className="sender-info">
-                    <span className="from-label">From</span>
-                    <span className="sender-name">
-                      {invitation.sender.displayName}
-                    </span>
+                  <div className="invitation-time">
+                    {formatScheduledDate(invitation.scheduledDate)}
                   </div>
                 </div>
-                <div className="invitation-time">
-                  {formatScheduledDate(invitation.scheduledDate)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="no-invitations">
@@ -325,9 +340,10 @@ const PendingInvitationsCard = () => {
           <div className="invitation-modal-content">
             <div className="invitation-modal-header">
               <div className="sender-info-modal">
+                {/* ✅ FIXED: Use photoURL field and useDefaultAvatar logic in modal */}
                 <UserAvatar
                   user={{
-                    profileImage: selectedInvitation.sender.profileImageUrl,
+                    photoURL: (!selectedInvitation.sender.useDefaultAvatar && selectedInvitation.sender.photoURL) ? selectedInvitation.sender.photoURL : null,
                     displayName: selectedInvitation.sender.displayName,
                     email: selectedInvitation.sender.email,
                   }}
@@ -385,4 +401,3 @@ const PendingInvitationsCard = () => {
 };
 
 export default PendingInvitationsCard;
-

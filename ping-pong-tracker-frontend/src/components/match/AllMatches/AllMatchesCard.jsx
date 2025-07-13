@@ -61,10 +61,20 @@ const AllMatchesCard = () => {
       return [];
     }
 
+    console.log("🔍 FIXED DEBUG - AllMatchesCard:");
+    console.log("  - matches:", matches);
+    console.log("  - allUsersMap:", allUsersMap);
+
     return matches.map((match) => {
       // Determine player1 and player2 objects
       const player1 = allUsersMap[match.player1Id];
       const player2 = allUsersMap[match.player2Id];
+
+      console.log("  Processing match:", match.id);
+      console.log("    - player1 data:", player1);
+      console.log("    - player1 photoURL:", player1?.photoURL);
+      console.log("    - player2 data:", player2);
+      console.log("    - player2 photoURL:", player2?.photoURL);
 
       const player1DisplayName = player1?.displayName || player1?.name || 'Unknown Player 1';
       const player2DisplayName = player2?.displayName || player2?.name || 'Unknown Player 2';
@@ -100,21 +110,21 @@ const AllMatchesCard = () => {
       // Format score
       const scoreText = match.status === 'completed' ? `${match.player1Score || 0} - ${match.player2Score || 0}` : 'N/A';
 
-      return {
+      const processedMatch = {
         id: match.id, // Important for table key
         date: formattedDate,
-        // NEW: Store both players' info for the 'Players' column
+        // ✅ FIXED: Store photoURL instead of profileImage
         players: {
           player1: {
             id: match.player1Id,
             displayName: player1DisplayName,
-            profileImage: player1?.profileImage,
+            photoURL: player1?.photoURL,  // ✅ FIXED: Use photoURL instead of profileImage
             email: player1?.email,
           },
           player2: {
             id: match.player2Id,
             displayName: player2DisplayName,
-            profileImage: player2?.profileImage,
+            photoURL: player2?.photoURL,  // ✅ FIXED: Use photoURL instead of profileImage
             email: player2?.email,
           },
         },
@@ -125,6 +135,9 @@ const AllMatchesCard = () => {
         notes: match.notes,
         fullMatch: match,
       };
+
+      console.log("    Final processed match players:", processedMatch.players);
+      return processedMatch;
     });
   }, [matches, allUsersMap, currentUserId, showAllMatches]);
 
@@ -138,39 +151,47 @@ const AllMatchesCard = () => {
     {
       header: 'Players', // Changed header from 'Opponent' to 'Players'
       accessor: 'players',
-      Cell: ({ row }) => (
-        <div className="d-flex align-items-center">
-          {/* Player 1 */}
-          <UserAvatar
-            user={{
-              profileImage: row.players.player1.profileImage,
-              displayName: row.players.player1.displayName,
-              email: row.players.player1.email,
-            }}
-            size="small"
-            className="me-2"
-          />
-          <span className={row.players.player1.id === currentUserId ? 'fw-bold text-primary' : ''}>
-            {row.players.player1.id === currentUserId ? 'You' : row.players.player1.displayName}
-          </span>
+      Cell: ({ row }) => {
+        console.log("🔍 RENDERING PLAYERS:", row.players);
+        console.log("  - Player1 photoURL:", row.players.player1.photoURL);
+        console.log("  - Player2 photoURL:", row.players.player2.photoURL);
 
-          <span className="mx-2 text-muted">vs.</span> {/* "vs." separator */}
+        return (
+          <div className="d-flex align-items-center">
+            {/* Player 1 */}
+            {/* ✅ FIXED: Use photoURL field instead of profileImage */}
+            <UserAvatar
+              user={{
+                photoURL: row.players.player1.photoURL,
+                displayName: row.players.player1.displayName,
+                email: row.players.player1.email,
+              }}
+              size="small"
+              className="me-2"
+            />
+            <span className={row.players.player1.id === currentUserId ? 'fw-bold text-primary' : ''}>
+              {row.players.player1.id === currentUserId ? 'You' : row.players.player1.displayName}
+            </span>
 
-          {/* Player 2 */}
-          <UserAvatar
-            user={{
-              profileImage: row.players.player2.profileImage,
-              displayName: row.players.player2.displayName,
-              email: row.players.player2.email,
-            }}
-            size="small"
-            className="me-2"
-          />
-          <span className={row.players.player2.id === currentUserId ? 'fw-bold text-primary' : ''}>
-            {row.players.player2.id === currentUserId ? 'You' : row.players.player2.displayName}
-          </span>
-        </div>
-      ),
+            <span className="mx-2 text-muted">vs.</span> {/* "vs." separator */}
+
+            {/* Player 2 */}
+            {/* ✅ FIXED: Use photoURL field instead of profileImage */}
+            <UserAvatar
+              user={{
+                photoURL: row.players.player2.photoURL,
+                displayName: row.players.player2.displayName,
+                email: row.players.player2.email,
+              }}
+              size="small"
+              className="me-2"
+            />
+            <span className={row.players.player2.id === currentUserId ? 'fw-bold text-primary' : ''}>
+              {row.players.player2.id === currentUserId ? 'You' : row.players.player2.displayName}
+            </span>
+          </div>
+        );
+      },
     },
     {
       header: 'Score',
@@ -273,3 +294,4 @@ const AllMatchesCard = () => {
 };
 
 export default AllMatchesCard;
+

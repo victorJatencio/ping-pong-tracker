@@ -68,7 +68,10 @@ const RecentMatchesCard = () => {
       return [];
     }
 
-    
+    console.log("🔍 FIXED DEBUG - RecentMatchesCard:");
+    console.log("  - allMatches:", allMatches);
+    console.log("  - usersMap:", usersMap);
+    console.log("  - currentUser.uid:", currentUser.uid);
 
     // Filter for completed matches only
     const completedMatches = allMatches.filter(
@@ -77,17 +80,16 @@ const RecentMatchesCard = () => {
     );
 
     return completedMatches.slice(0, 3).map((match, index) => {
+      console.log(`  Processing match ${index + 1}:`, match);
 
       const player1_method1 = usersMap[match.player1Id];
       const player1_method2 = Object.values(usersMap).find(user => user.id === match.player1Id);
       const player1_method3 = Object.values(usersMap).find(user => user.uid === match.player1Id);
       
-
       const player2_method1 = usersMap[match.player2Id];
       const player2_method2 = Object.values(usersMap).find(user => user.id === match.player2Id);
       const player2_method3 = Object.values(usersMap).find(user => user.uid === match.player2Id);
       
-
       // Use the first method that works
       const player1 = player1_method1 || player1_method2 || player1_method3 || {
         name: "Unknown Player 1",
@@ -105,11 +107,12 @@ const RecentMatchesCard = () => {
       const isCurrentUserPlayer1 = match.player1Id === currentUser.uid;
       const opponent = isCurrentUserPlayer1 ? player2 : player1;
       
+      console.log("    Opponent data:", opponent);
+      console.log("    Opponent photoURL:", opponent.photoURL);
 
       // Determine winner from scores
       const player1Score = match.player1Score || 0;
       const player2Score = match.player2Score || 0;
-      
       
       let currentUserWon = false;
       if (player1Score !== player2Score) {
@@ -143,12 +146,14 @@ const RecentMatchesCard = () => {
         score: score,
         date: timeAgo,
         completedDate: matchDate,
-        opponentAvatar: opponent.profileImageUrl || null,
+        // ✅ FIXED: Use photoURL instead of profileImageUrl
+        opponentAvatar: opponent.photoURL || null,
         match: match,
         currentUserWon: currentUserWon,
       };
 
       console.log("    Final processed match:", finalMatch);
+      console.log("    Final opponentAvatar:", finalMatch.opponentAvatar);
       return finalMatch;
     });
   }, [allMatches, usersMap, currentUser?.uid]);
@@ -196,37 +201,46 @@ const RecentMatchesCard = () => {
       ) : (
         // Matches list
         <div className="list-group list-group-flush">
-          {recentMatches.map((match) => (
-            <div key={match.id} className="list-group-item border-0 px-0 py-2">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="d-flex align-items-center">
-                  <UserAvatar
-                    user={{
-                      displayName: match.opponent,
-                      profileImageUrl: match.opponentAvatar,
-                    }}
-                    size={32}
-                    className="me-2"
-                  />
-                  <div>
-                    <h6 className="mb-0">vs. {match.opponent}</h6>
-                    <small className="text-muted">{match.date}</small>
+          {recentMatches.map((match) => {
+            console.log("🔍 RENDERING MATCH:", match);
+            console.log("  - Avatar data being passed:", {
+              photoURL: match.opponentAvatar,
+              displayName: match.opponent,
+            });
+
+            return (
+              <div key={match.id} className="list-group-item border-0 px-0 py-2">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div className="d-flex align-items-center">
+                    {/* ✅ FIXED: Use photoURL field instead of profileImageUrl */}
+                    <UserAvatar
+                      user={{
+                        photoURL: match.opponentAvatar,
+                        displayName: match.opponent,
+                      }}
+                      size={32}
+                      className="me-2"
+                    />
+                    <div>
+                      <h6 className="mb-0">vs. {match.opponent}</h6>
+                      <small className="text-muted">{match.date}</small>
+                    </div>
                   </div>
-                </div>
-                <div className="text-end">
-                  <Badge
-                    bg={match.result === "Won" ? "success" : "danger"}
-                    className="mb-1"
-                  >
-                    {match.result}
-                  </Badge>
-                  <div>
-                    <small className="fw-bold">{match.score}</small>
+                  <div className="text-end">
+                    <Badge
+                      bg={match.result === "Won" ? "success" : "danger"}
+                      className="mb-1"
+                    >
+                      {match.result}
+                    </Badge>
+                    <div>
+                      <small className="fw-bold">{match.score}</small>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </DashboardCard>
@@ -234,3 +248,4 @@ const RecentMatchesCard = () => {
 };
 
 export default React.memo(RecentMatchesCard);
+

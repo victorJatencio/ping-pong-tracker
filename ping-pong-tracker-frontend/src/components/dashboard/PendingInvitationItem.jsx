@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import UserAvatar from '../../components/common/UserAvatar'; // ✅ FIXED: Import UserAvatar component
 import './PendingInvitationItem.scss';
 
 /**
@@ -56,18 +57,25 @@ const PendingInvitationItem = ({
     });
   };
 
+  // ✅ FIXED: Create proper avatar data with useDefaultAvatar logic
+  const avatarData = {
+    photoURL: (!sender.useDefaultAvatar && sender.photoURL) ? sender.photoURL : null,
+    displayName: sender.displayName,
+    email: sender.email,
+  };
+
+  console.log("🔍 AVATAR DEBUG - PendingInvitationItem avatar data:", avatarData);
+
   return (
     <div className="pending-invitation-item">
       {/* Sender Info */}
       <div className="invitation-header">
         <div className="sender-info">
-          <img 
-            src={sender.profileImageUrl || 'https://i.pravatar.cc/150?u=default'} 
-            alt={sender.displayName}
+          {/* ✅ FIXED: Replace <img> tag with UserAvatar component */}
+          <UserAvatar
+            user={avatarData}
+            size="small"
             className="sender-avatar"
-            onError={(e) => {
-              e.target.src = 'https://i.pravatar.cc/150?u=default';
-            }}
           />
           <div className="sender-details">
             <h4 className="sender-name">{sender.displayName}</h4>
@@ -151,7 +159,8 @@ PendingInvitationItem.propTypes = {
     sender: PropTypes.shape({
       uid: PropTypes.string.isRequired,
       displayName: PropTypes.string.isRequired,
-      profileImageUrl: PropTypes.string
+      photoURL: PropTypes.string, // ✅ FIXED: Updated to photoURL
+      useDefaultAvatar: PropTypes.bool // ✅ FIXED: Added useDefaultAvatar prop
     }).isRequired,
     message: PropTypes.string,
     scheduledDate: PropTypes.oneOfType([
@@ -176,4 +185,3 @@ PendingInvitationItem.defaultProps = {
 };
 
 export default PendingInvitationItem;
-

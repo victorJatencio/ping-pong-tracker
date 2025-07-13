@@ -110,7 +110,7 @@ const RecentActivityCard = () => {
               <UserAvatar
                 user={{
                   // ✅ FIXED: Handle useDefaultAvatar logic properly
-                  profileImage: (!row.opponent.useDefaultAvatar && row.opponent.photoURL) ? row.opponent.photoURL : null,
+                  photoURL: (!row.opponent.useDefaultAvatar && row.opponent.photoURL) ? row.opponent.photoURL : null,
                   displayName: row.opponent.displayName || row.opponent.name,
                   email: row.opponent.email,
                   // ✅ OPTION: Pass useDefaultAvatar to let UserAvatar handle it
