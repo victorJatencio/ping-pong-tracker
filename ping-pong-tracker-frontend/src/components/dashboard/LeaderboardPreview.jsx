@@ -1,13 +1,24 @@
 import React, { useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../../contexts/AuthContext";
-import { useGetLeaderboardPreviewQuery } from "../../store/slices/apiSlice";
+import { 
+  useGetLeaderboardPreviewQuery,
+  useGetUserProfileQuery // ✅ MINIMAL CHANGE: Added import
+} from "../../store/slices/apiSlice";
 import UserAvatar from "../common/UserAvatar";
 import "./LeaderboardPreview.scss";
 
 const LeaderboardPreview = () => {
   const navigate = useNavigate();
   const { currentUser } = useContext(AuthContext);
+
+  // ✅ MINIMAL CHANGE: Add RTK Query for current user profile
+  const { 
+    data: currentUserProfile,
+    isLoading: isLoadingCurrentUser 
+  } = useGetUserProfileQuery(currentUser?.uid, {
+    skip: !currentUser?.uid
+  });
 
   const {
     data: leaderboard = [],
@@ -16,7 +27,9 @@ const LeaderboardPreview = () => {
     refetch,
   } = useGetLeaderboardPreviewQuery();
 
-  const currentUserId = currentUser?.uid;
+  // ✅ MINIMAL CHANGE: Use profile data for current user ID comparison
+  const displayUser = currentUserProfile || currentUser;
+  const currentUserId = displayUser?.uid || currentUser?.uid;
 
   const getPositionText = (position) => {
     switch (position) {
@@ -35,7 +48,8 @@ const LeaderboardPreview = () => {
     navigate("/leaderboard");
   };
 
-  if (isLoading) {
+  // ✅ MINIMAL CHANGE: Include current user profile loading
+  if (isLoading || isLoadingCurrentUser) {
     return (
       <div className="leaderboard-preview">
         <div className="leaderboard-preview__header">
@@ -99,7 +113,8 @@ const LeaderboardPreview = () => {
       <div className="leaderboard-preview__content">
         <div className="leaderboard-preview__list">
           {leaderboard.map((entry) => {
-            const isCurrentUser = entry.player.id === currentUser?.uid; // ✅ Fixed
+            // ✅ MINIMAL CHANGE: Use profile data for current user comparison
+            const isCurrentUser = entry.player.id === currentUserId;
 
             return (
               <div
@@ -161,3 +176,4 @@ const LeaderboardPreview = () => {
 };
 
 export default LeaderboardPreview;
+

@@ -1203,18 +1203,22 @@ export const apiSlice = createApi({
           const downloadURL = await getDownloadURL(uploadResult.ref);
           console.log("✅ Download URL obtained:", downloadURL);
 
-          // Update the user's profile with the new photo URL
+          // ✅ FIXED: Update the user's profile with the new photo URL AND set useDefaultAvatar to false
           const userDocRef = doc(db, "users", userId);
           await updateDoc(userDocRef, {
             photoURL: downloadURL,
+            useDefaultAvatar: false, // ✅ CRITICAL FIX: Set to false when uploading custom image
             updatedAt: serverTimestamp(),
           });
 
-          console.log("✅ User profile updated with new photo URL");
+          console.log(
+            "✅ User profile updated with new photo URL and useDefaultAvatar set to false"
+          );
 
           return {
             data: {
               photoURL: downloadURL,
+              useDefaultAvatar: false, // ✅ Return the updated flag
               success: true,
               userId,
             },
@@ -1244,18 +1248,22 @@ export const apiSlice = createApi({
             userId
           );
 
-          // Update the user's profile to remove the photo URL
+          // ✅ FIXED: Update the user's profile to remove the photo URL AND set useDefaultAvatar to true
           const userDocRef = doc(db, "users", userId);
           await updateDoc(userDocRef, {
             photoURL: null,
+            useDefaultAvatar: true, // ✅ CRITICAL FIX: Set to true when removing custom image
             updatedAt: serverTimestamp(),
           });
 
-          console.log("✅ Profile image removed successfully");
+          console.log(
+            "✅ Profile image removed successfully and useDefaultAvatar set to true"
+          );
 
           return {
             data: {
               success: true,
+              useDefaultAvatar: true, // ✅ Return the updated flag
               userId,
             },
           };
@@ -1269,7 +1277,6 @@ export const apiSlice = createApi({
         { type: "User", id: "LIST" },
       ],
     }),
-
   }),
 });
 

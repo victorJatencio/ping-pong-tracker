@@ -3,15 +3,24 @@ import { AuthContext } from '../../contexts/AuthContext';
 import {
   useGetRecentMatchesQuery,
   useGetAllUsersQuery,
+  useGetUserProfileQuery,
 } from '../../store/slices/apiSlice';
-import DashboardCard from '../common/Card'; // Assuming your DashboardCard is a Bootstrap Card wrapper
-import GenericTable from '../common/Table/GenericTable'; // Corrected import path
-import UserAvatar from '../common/UserAvatar'; // Assuming you have this component
-import { formatDistanceToNow } from 'date-fns'; // For relative time formatting
+import DashboardCard from '../common/Card';
+import GenericTable from '../common/Table/GenericTable';
+import UserAvatar from '../common/UserAvatar';
+import { formatDistanceToNow } from 'date-fns';
 
 const RecentActivityCard = () => {
   const { currentUser } = useContext(AuthContext);
   const currentUserId = currentUser?.uid;
+
+  // Get current user profile data via RTK Query
+  const { 
+    data: currentUserProfile,
+    isLoading: isLoadingCurrentUser 
+  } = useGetUserProfileQuery(currentUserId, {
+    skip: !currentUserId
+  });
 
   // Fetch recent matches for the current user
   const {
@@ -29,13 +38,16 @@ const RecentActivityCard = () => {
     error: usersError,
   } = useGetAllUsersQuery();
 
+  // Use profile data for current user, fallback to AuthContext
+  const displayUser = currentUserProfile || currentUser;
+
   // Combine data and prepare for GenericTable
   const tableData = useMemo(() => {
-    // --- START DEBUGGING LOGS ---
-    console.log("DEBUG: Recent Matches (raw):", recentMatches);
-    console.log("DEBUG: All Users (map):", allUsers);
-    console.log("DEBUG: Current User ID:", currentUserId);
-    // --- END DEBUGGING LOGS ---
+    console.log("🔍 DEBUG - RecentActivityCard Data:");
+    console.log("  - Recent Matches:", recentMatches);
+    console.log("  - All Users Map:", allUsers);
+    console.log("  - Current User ID:", currentUserId);
+    
     if (!recentMatches.length || !Object.keys(allUsers).length) {
       return [];
     }
@@ -43,21 +55,15 @@ const RecentActivityCard = () => {
     return recentMatches.map((match) => {
       const isWinner = match.winnerId === currentUserId;
       const opponentId = isWinner ? match.loserId : match.winnerId;
-     // --- START DEBUGGING LOGS PER MATCH ---
-      console.log("DEBUG: Processing Match ID:", match.id);
-      console.log("DEBUG: Match Winner ID:", match.winnerId);
-      console.log("DEBUG: Match Loser ID:", match.loserId);
-      console.log("DEBUG: Calculated Opponent ID:", opponentId);
-     // --- END DEBUGGING LOGS PER MATCH ---
-
-
 
       const opponent = allUsers[opponentId];
-      // --- START DEBUGGING LOGS FOR OPPONENT ---
-      console.log("DEBUG: Opponent Object from allUsers:", opponent);
-      // --- END DEBUGGING LOGS FOR OPPONENT ---
-
+      console.log("🔍 DEBUG - Opponent data:", opponent);
       
+      if (opponent) {
+        console.log("  - photoURL:", opponent.photoURL);
+        console.log("  - useDefaultAvatar:", opponent.useDefaultAvatar);
+      }
+
       const opponentDisplayName = opponent?.displayName || opponent?.name || 'Unknown Player';
 
       // Determine activity message
@@ -80,53 +86,59 @@ const RecentActivityCard = () => {
       const historyText = matchTime ? formatDistanceToNow(matchTime, { addSuffix: true }) : 'N/A';
 
       return {
-        id: match.id, // Important for table key
+        id: match.id,
         activity: activityMessage,
         history: historyText,
         status: statusBadge,
-        // Include full match data for potential future use in details/modal
         fullMatch: match,
         opponent: opponent,
       };
     });
-  }, [recentMatches, allUsers, currentUserId]);
+  }, [recentMatches, allUsers, currentUserId, currentUserProfile, displayUser]);
 
   // Define columns for GenericTable
   const columns = useMemo(() => [
     {
       header: 'Activity',
       accessor: 'activity',
-      Cell: ({ row }) => (
-        <div className="d-flex align-items-center">
-          {row.opponent && (
-            <UserAvatar
-              user={{
-                profileImage: row.opponent.profileImage,
-                displayName: row.opponent.displayName,
-                email: row.opponent.email,
-              }}
-              size="small" // Assuming UserAvatar supports size prop
-              className="me-2"
-            />
-          )}
-          <span>{row.activity}</span>
-        </div>
-      ),
+      Cell: ({ row }) => {
+        console.log("🎨 RENDERING AVATAR for opponent:", row.opponent);
+        
+        return (
+          <div className="d-flex align-items-center">
+            {row.opponent && (
+              <UserAvatar
+                user={{
+                  // ✅ FIXED: Handle useDefaultAvatar logic properly
+                  profileImage: (!row.opponent.useDefaultAvatar && row.opponent.photoURL) ? row.opponent.photoURL : null,
+                  displayName: row.opponent.displayName || row.opponent.name,
+                  email: row.opponent.email,
+                  // ✅ OPTION: Pass useDefaultAvatar to let UserAvatar handle it
+                  useDefaultAvatar: row.opponent.useDefaultAvatar,
+                }}
+                size="small"
+                className="me-2"
+              />
+            )}
+            <span>{row.activity}</span>
+          </div>
+        );
+      },
     },
     {
       header: 'History',
       accessor: 'history',
-      cellClassName: 'text-muted', // Bootstrap class for muted text
+      cellClassName: 'text-muted',
     },
     {
       header: 'Status',
       accessor: 'status',
-      cellClassName: 'text-center', // Center badge
+      cellClassName: 'text-center',
     },
   ], []);
 
-  // Handle loading states
-  if (isLoadingMatches || isLoadingUsers) {
+  // Include current user profile loading in loading state
+  if (isLoadingMatches || isLoadingUsers || isLoadingCurrentUser) {
     return (
       <DashboardCard title="Recent Activity">
         <div className="d-flex justify-content-center align-items-center py-5">
@@ -155,7 +167,7 @@ const RecentActivityCard = () => {
       title="Recent Activity"
       footerAction={
         <button
-          className="btn btn-outline-primary btn-sm" // Bootstrap button classes
+          className="btn btn-outline-primary btn-sm"
           onClick={() => console.log("Navigate to full Match History")}
           disabled={tableData.length === 0}
         >
@@ -173,3 +185,4 @@ const RecentActivityCard = () => {
 };
 
 export default RecentActivityCard;
+
