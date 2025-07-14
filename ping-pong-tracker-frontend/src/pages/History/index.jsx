@@ -40,11 +40,8 @@ const History = () => {
           </Row>
 
           <Row className="lg-12">
-            <Col lg={6}>
+            <Col lg={12}>
               <MonthlySummaryCard />
-            </Col>
-            <Col lg={6}>
-              <PerformanceOverTimeCard />
             </Col>
           </Row>
 

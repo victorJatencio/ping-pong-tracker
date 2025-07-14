@@ -1,235 +1,182 @@
 // src/components/history/PerformanceOverTimeCard.jsx
 import React, { useContext, useMemo, useState } from 'react';
-import { ButtonGroup, Button } from 'react-bootstrap';
-import { Line } from 'react-chartjs-2';
+import { ButtonGroup, Button, Row, Col } from 'react-bootstrap';
+import { Doughnut, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
+  BarElement,
+  ArcElement,
   Title,
   Tooltip,
-  Legend,
-  Filler
+  Legend
 } from 'chart.js';
 import { AuthContext } from '../../../contexts/AuthContext';
-import { useGetUserMatchHistoryQuery } from '../../../store/slices/apiSlice';
+import { useGetPlayerStatsFromBackendQuery } from '../../../store/slices/apiSlice';
 import DashboardCard from '../../common/Card';
 
 // Register Chart.js components
 ChartJS.register(
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
+  BarElement,
+  ArcElement,
   Title,
   Tooltip,
-  Legend,
-  Filler
+  Legend
 );
 
-const PerformanceOverTimeCard = ({ title = "Performance Over Time" }) => {
+const PerformanceOverTimeCard = ({ title = "Performance Overview" }) => {
   const { currentUser } = useContext(AuthContext);
-  const [timeRange, setTimeRange] = useState('3months'); // '1month', '3months', '6months', 'all'
+  const [chartType, setChartType] = useState('overview'); // 'overview', 'breakdown', 'progress'
 
-  // Fetch user's match history
+  // Use the working stats endpoint
   const { 
-    data: matchHistoryResponse, 
+    data: userStats, 
     error, 
     isLoading 
-  } = useGetUserMatchHistoryQuery({
-    userId: currentUser?.uid,
-    filters: {
-      result: 'all',
-      startDate: null,
-      endDate: null,
-      sortBy: 'date',
-      sortOrder: 'asc' // Chronological order for chart
-    },
-    pagination: { page: 1, pageSize: 1000 } // Get all matches for analysis
-  }, {
+  } = useGetPlayerStatsFromBackendQuery(currentUser?.uid, {
     skip: !currentUser?.uid
   });
 
-  // Process data for chart
+  // Process data for different chart types
   const chartData = useMemo(() => {
-    if (!matchHistoryResponse?.matches || matchHistoryResponse.matches.length === 0) {
-      return {
-        labels: [],
-        datasets: []
-      };
+    const stats = userStats?.data || userStats;
+    
+    if (!stats) {
+      return null;
     }
 
-    const matches = matchHistoryResponse.matches;
-    
-    // Filter matches based on time range
-    const now = new Date();
-    let startDate = new Date();
-    
-    switch (timeRange) {
-      case '1month':
-        startDate.setMonth(now.getMonth() - 1);
-        break;
-      case '3months':
-        startDate.setMonth(now.getMonth() - 3);
-        break;
-      case '6months':
-        startDate.setMonth(now.getMonth() - 6);
-        break;
-      case 'all':
-      default:
-        startDate = new Date(0); // Beginning of time
-        break;
-    }
+    const wins = stats.totalWins || 0;
+    const losses = stats.totalLosses || 0;
+    const total = stats.gamesPlayed || 0;
+    const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
+    const currentStreak = stats.winStreak || 0;
+    const maxStreak = stats.maxWinStreak || 0;
 
-    const filteredMatches = matches.filter(match => {
-      const matchDate = new Date(match.completedDate);
-      return matchDate >= startDate;
-    });
-
-    if (filteredMatches.length === 0) {
-      return {
-        labels: [],
-        datasets: []
-      };
-    }
-
-    // Sort matches chronologically
-    const sortedMatches = [...filteredMatches].sort((a, b) => {
-      const dateA = new Date(a.completedDate);
-      const dateB = new Date(b.completedDate);
-      return dateA - dateB;
-    });
-
-    // Group matches by week for better visualization
-    const weeklyData = {};
-    
-    sortedMatches.forEach(match => {
-      const matchDate = new Date(match.completedDate);
-      // Get the start of the week (Sunday)
-      const weekStart = new Date(matchDate);
-      weekStart.setDate(matchDate.getDate() - matchDate.getDay());
-      const weekKey = weekStart.toISOString().split('T')[0];
-      
-      if (!weeklyData[weekKey]) {
-        weeklyData[weekKey] = {
-          wins: 0,
-          total: 0,
-          date: weekStart
+    switch (chartType) {
+      case 'breakdown':
+        // Win/Loss breakdown doughnut chart
+        return {
+          type: 'doughnut',
+          data: {
+            labels: ['Wins', 'Losses'],
+            datasets: [{
+              data: [wins, losses],
+              backgroundColor: [
+                'rgba(40, 167, 69, 0.8)',   // Success green
+                'rgba(220, 53, 69, 0.8)'    // Danger red
+              ],
+              borderColor: [
+                'rgba(40, 167, 69, 1)',
+                'rgba(220, 53, 69, 1)'
+              ],
+              borderWidth: 2,
+              hoverOffset: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  padding: 20,
+                  usePointStyle: true
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const percentage = total > 0 ? Math.round((context.parsed / total) * 100) : 0;
+                    return `${context.label}: ${context.parsed} (${percentage}%)`;
+                  }
+                }
+              }
+            }
+          }
         };
-      }
-      
-      weeklyData[weekKey].total++;
-      if (match.winnerId === currentUser?.uid) {
-        weeklyData[weekKey].wins++;
-      }
-    });
 
-    // Convert to arrays for chart
-    const weeks = Object.keys(weeklyData).sort();
-    const labels = weeks.map(week => {
-      const date = new Date(week);
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    });
-
-    const winRates = weeks.map(week => {
-      const data = weeklyData[week];
-      return data.total > 0 ? Math.round((data.wins / data.total) * 100) : 0;
-    });
-
-    // Calculate running average for smoother trend line
-    const runningAverage = [];
-    let sum = 0;
-    winRates.forEach((rate, index) => {
-      sum += rate;
-      runningAverage.push(Math.round(sum / (index + 1)));
-    });
-
-    return {
-      labels,
-      datasets: [
-        {
-          label: 'Weekly Win Rate',
-          data: winRates,
-          borderColor: 'rgb(54, 162, 235)',
-          backgroundColor: 'rgba(54, 162, 235, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-        },
-        {
-          label: 'Trend Line',
-          data: runningAverage,
-          borderColor: 'rgb(255, 99, 132)',
-          backgroundColor: 'transparent',
-          borderDash: [5, 5],
-          fill: false,
-          tension: 0.4,
-          pointRadius: 2,
-          pointHoverRadius: 4,
-        }
-      ]
-    };
-  }, [matchHistoryResponse, currentUser, timeRange]);
-
-  // Chart options
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top',
-        labels: {
-          usePointStyle: true,
-          padding: 20
-        }
-      },
-      tooltip: {
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          label: function(context) {
-            return `${context.dataset.label}: ${context.parsed.y}%`;
+      case 'progress':
+        // Performance metrics bar chart
+        return {
+          type: 'bar',
+          data: {
+            labels: ['Win Rate', 'Current Streak', 'Best Streak'],
+            datasets: [{
+              label: 'Performance Metrics',
+              data: [winRate, currentStreak, maxStreak],
+              backgroundColor: [
+                'rgba(54, 162, 235, 0.8)',   // Primary blue
+                'rgba(255, 193, 7, 0.8)',    // Warning yellow
+                'rgba(220, 53, 69, 0.8)'     // Danger red
+              ],
+              borderColor: [
+                'rgba(54, 162, 235, 1)',
+                'rgba(255, 193, 7, 1)',
+                'rgba(220, 53, 69, 1)'
+              ],
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: false
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    if (context.dataIndex === 0) {
+                      return `Win Rate: ${context.parsed.y}%`;
+                    }
+                    return `${context.label}: ${context.parsed.y}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(value, index) {
+                    if (index === 0) return value + '%';
+                    return value;
+                  }
+                }
+              }
+            }
           }
-        }
-      }
-    },
-    scales: {
-      x: {
-        display: true,
-        title: {
-          display: true,
-          text: 'Time Period'
-        },
-        grid: {
-          display: false
-        }
-      },
-      y: {
-        display: true,
-        title: {
-          display: true,
-          text: 'Win Rate (%)'
-        },
-        min: 0,
-        max: 100,
-        ticks: {
-          callback: function(value) {
-            return value + '%';
+        };
+
+      default: // 'overview'
+        // Performance overview with key metrics
+        return {
+          type: 'overview',
+          stats: {
+            totalMatches: total,
+            wins,
+            losses,
+            winRate,
+            currentStreak,
+            maxStreak
           }
-        }
-      }
-    },
-    interaction: {
-      mode: 'nearest',
-      axis: 'x',
-      intersect: false
+        };
     }
+  }, [userStats, chartType]);
+
+  // Get performance level
+  const getPerformanceLevel = (winRate, totalMatches) => {
+    if (totalMatches === 0) return { level: 'Getting Started', color: 'secondary', icon: '🎯' };
+    if (winRate >= 80) return { level: 'Elite Player', color: 'danger', icon: '🏆' };
+    if (winRate >= 70) return { level: 'Advanced', color: 'success', icon: '🚀' };
+    if (winRate >= 60) return { level: 'Skilled', color: 'primary', icon: '👍' };
+    if (winRate >= 50) return { level: 'Developing', color: 'info', icon: '📈' };
+    return { level: 'Learning', color: 'warning', icon: '💪' };
   };
 
   if (isLoading) {
@@ -254,63 +201,134 @@ const PerformanceOverTimeCard = ({ title = "Performance Over Time" }) => {
     );
   }
 
-  if (chartData.labels.length === 0) {
+  if (!chartData) {
     return (
       <DashboardCard title={title}>
         <div className="text-center py-4">
           <h5 className="text-muted mb-2">No Data Available</h5>
           <p className="text-muted mb-0 small">
-            Play more matches to see your performance trends!
+            Play some matches to see your performance overview!
           </p>
         </div>
       </DashboardCard>
     );
   }
 
+  const performance = getPerformanceLevel(
+    chartData.stats?.winRate || 0, 
+    chartData.stats?.totalMatches || 0
+  );
+
   return (
     <DashboardCard title={title}>
       <div className="py-3">
-        {/* Time Range Selector */}
+        {/* Chart Type Selector */}
         <div className="d-flex justify-content-center mb-3">
           <ButtonGroup size="sm">
             <Button
-              variant={timeRange === '1month' ? 'primary' : 'outline-primary'}
-              onClick={() => setTimeRange('1month')}
+              variant={chartType === 'overview' ? 'primary' : 'outline-primary'}
+              onClick={() => setChartType('overview')}
             >
-              1M
+              Overview
             </Button>
             <Button
-              variant={timeRange === '3months' ? 'primary' : 'outline-primary'}
-              onClick={() => setTimeRange('3months')}
+              variant={chartType === 'breakdown' ? 'primary' : 'outline-primary'}
+              onClick={() => setChartType('breakdown')}
             >
-              3M
+              W/L Split
             </Button>
             <Button
-              variant={timeRange === '6months' ? 'primary' : 'outline-primary'}
-              onClick={() => setTimeRange('6months')}
+              variant={chartType === 'progress' ? 'primary' : 'outline-primary'}
+              onClick={() => setChartType('progress')}
             >
-              6M
-            </Button>
-            <Button
-              variant={timeRange === 'all' ? 'primary' : 'outline-primary'}
-              onClick={() => setTimeRange('all')}
-            >
-              All
+              Metrics
             </Button>
           </ButtonGroup>
         </div>
 
-        {/* Chart Container */}
-        <div style={{ height: '300px', position: 'relative' }}>
-          <Line data={chartData} options={chartOptions} />
-        </div>
+        {/* Chart Content */}
+        {chartType === 'overview' && chartData.stats && (
+          <div>
+            {/* Performance Level */}
+            <div className="text-center mb-4">
+              <span className="fs-1 me-2">{performance.icon}</span>
+              <div>
+                <h4 className={`text-${performance.color} mb-1`}>
+                  {performance.level}
+                </h4>
+                <small className="text-muted">
+                  {chartData.stats.winRate}% win rate • {chartData.stats.totalMatches} matches
+                </small>
+              </div>
+            </div>
 
-        {/* Chart Legend */}
-        <div className="text-center mt-3">
-          <small className="text-muted">
-            📈 Blue line shows weekly win rates • 📊 Red dashed line shows overall trend
-          </small>
-        </div>
+            {/* Key Metrics Grid */}
+            <Row className="text-center g-3">
+              <Col xs={6}>
+                <div className="border rounded p-3">
+                  <h3 className="text-success mb-1">{chartData.stats.wins}</h3>
+                  <small className="text-muted">Total Wins</small>
+                </div>
+              </Col>
+              <Col xs={6}>
+                <div className="border rounded p-3">
+                  <h3 className="text-danger mb-1">{chartData.stats.losses}</h3>
+                  <small className="text-muted">Total Losses</small>
+                </div>
+              </Col>
+              <Col xs={6}>
+                <div className="border rounded p-3">
+                  <h3 className="text-warning mb-1">{chartData.stats.currentStreak}</h3>
+                  <small className="text-muted">Current Streak</small>
+                </div>
+              </Col>
+              <Col xs={6}>
+                <div className="border rounded p-3">
+                  <h3 className="text-info mb-1">{chartData.stats.maxStreak}</h3>
+                  <small className="text-muted">Best Streak</small>
+                </div>
+              </Col>
+            </Row>
+
+            {/* Performance Message */}
+            <div className="text-center mt-4">
+              <small className="text-muted">
+                {chartData.stats.totalMatches === 0 
+                  ? "Start playing to build your performance profile!"
+                  : chartData.stats.winRate >= 70
+                  ? "Excellent performance! You're dominating the table! 🔥"
+                  : chartData.stats.winRate >= 50
+                  ? "Solid performance! Keep improving your game! 💪"
+                  : "Every match is progress! Keep playing and learning! 🚀"
+                }
+              </small>
+            </div>
+          </div>
+        )}
+
+        {/* Chart Visualizations */}
+        {(chartType === 'breakdown' || chartType === 'progress') && (
+          <div style={{ height: '300px', position: 'relative' }}>
+            {chartData.type === 'doughnut' && (
+              <Doughnut data={chartData.data} options={chartData.options} />
+            )}
+            {chartData.type === 'bar' && (
+              <Bar data={chartData.data} options={chartData.options} />
+            )}
+          </div>
+        )}
+
+        {/* Chart Description */}
+        {chartType !== 'overview' && (
+          <div className="text-center mt-3">
+            <small className="text-muted">
+              {chartType === 'breakdown' 
+                ? "📊 Visual breakdown of your wins vs losses"
+                : "📈 Key performance metrics and achievements"
+              }
+            </small>
+          </div>
+        )}
       </div>
     </DashboardCard>
   );

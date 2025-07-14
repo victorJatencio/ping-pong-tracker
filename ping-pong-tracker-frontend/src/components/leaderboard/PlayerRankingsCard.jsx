@@ -1,8 +1,7 @@
-import React, { useContext, useMemo } from "react";
+import React, { useContext, useMemo, useState, useEffect } from "react";
 import { Badge, Pagination } from "react-bootstrap";
 import { AuthContext } from "../../contexts/AuthContext";
 import {
-  useGetLeaderboardDataQuery,
   useGetAllUsersQuery,
 } from "../../store/slices/apiSlice";
 import DashboardCard from "../common/Card";
@@ -35,78 +34,144 @@ const PlayerRankingsCard = ({
     handlePageChange,
     resetFilters,
     hasActiveFilters,
-    filterParams,
-    paginationParams,
   } = useLeaderboardFilters();
 
-  // Data fetching
+  // Get all users
   const {
-    data: leaderboardResponse,
-    error: leaderboardError,
-    isLoading: leaderboardLoading,
-  } = useGetLeaderboardDataQuery({
-    filters: filterParams,
-    pagination: paginationParams,
-  });
-
-  console.log("🔍 DEBUG - Leaderboard Query State:", {
-    leaderboardResponse,
-    leaderboardError,
-    leaderboardLoading,
-    filterParams,
-    paginationParams,
-  });
-
-  const {
-    data: allUsers,
+    data: allUsers = {},
     error: usersError,
     isLoading: usersLoading,
   } = useGetAllUsersQuery();
 
-  // Process data for table
-  //   const { tableData, pagination } = useMemo(() => {
-  //     if (!leaderboardResponse?.leaderboard) {
-  //       return { tableData: [], pagination: null };
-  //     }
+  // State for player data
+  const [allPlayersData, setAllPlayersData] = useState([]);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [statsError, setStatsError] = useState(null);
 
-  //     const processedData = leaderboardResponse.leaderboard.map((player) => {
-  //       const user = allUsers?.[player.playerId];
-  //       const isCurrentUser = currentUser?.uid === player.playerId;
+  // Fetch stats for all users
+  useEffect(() => {
+    const fetchAllPlayersData = async () => {
+      if (!allUsers || Object.keys(allUsers).length === 0) {
+        return;
+      }
 
-  //       return {
-  //         id: player.playerId,
-  //         rank: player.rank,
-  //         player: {
-  //           id: player.playerId,
-  //           name: user?.displayName || user?.name || "Unknown Player",
-  //           avatar: user?.photoURL || null,
-  //           isCurrentUser,
-  //         },
-  //         matches: player.totalMatches,
-  //         winRate: `${Math.round(player.winRate * 100)}%`,
-  //         record: `${player.wins}-${player.losses}`,
-  //         streak: player.currentStreak,
-  //         score: player.score,
-  //       };
-  //     });
+      setIsLoadingStats(true);
+      setStatsError(null);
 
-  //     return {
-  //       tableData: processedData,
-  //       pagination: leaderboardResponse.pagination,
-  //     };
-  //   }, [leaderboardResponse, allUsers, currentUser]);
+      try {
+        const userIds = Object.keys(allUsers);
+        const playersWithStats = [];
+
+        // Fetch stats for each user
+        for (const userId of userIds) {
+          try {
+            const response = await fetch(`http://localhost:5000/api/stats/player/${userId}`);
+            
+            if (response.ok) {
+              const result = await response.json();
+              const user = allUsers[userId];
+              
+              if (result.success && user && result.data.gamesPlayed > 0) {
+                const stats = result.data;
+                playersWithStats.push({
+                  id: userId,
+                  name: user.displayName || user.email?.split('@')[0] || 'Unknown Player',
+                  avatar: user.photoURL,
+                  useDefaultAvatar: user.useDefaultAvatar,
+                  wins: stats.totalWins || 0,
+                  totalMatches: stats.gamesPlayed || 0,
+                  losses: stats.totalLosses || 0,
+                  winRate: stats.gamesPlayed > 0 ? (stats.totalWins / stats.gamesPlayed) : 0,
+                  currentStreak: stats.winStreak || 0,
+                  maxWinStreak: stats.maxWinStreak || 0,
+                  // Calculate score (simple formula: wins * 10 + win rate * 100)
+                  score: (stats.totalWins * 10) + ((stats.totalWins / stats.gamesPlayed) * 100)
+                });
+              }
+            } else {
+              console.warn(`Failed to fetch stats for user ${userId}:`, response.status);
+            }
+          } catch (error) {
+            console.warn(`Error fetching stats for user ${userId}:`, error);
+          }
+        }
+
+        // Sort players by wins (primary), then by win rate (secondary)
+        const sortedPlayers = playersWithStats.sort((a, b) => {
+          if (b.wins !== a.wins) {
+            return b.wins - a.wins;
+          }
+          if (b.winRate !== a.winRate) {
+            return b.winRate - a.winRate;
+          }
+          return a.totalMatches - b.totalMatches;
+        });
+
+        // Add rank to each player
+        const playersWithRank = sortedPlayers.map((player, index) => ({
+          ...player,
+          rank: index + 1
+        }));
+
+        setAllPlayersData(playersWithRank);
+      } catch (error) {
+        console.error('Error fetching players data:', error);
+        setStatsError(error);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchAllPlayersData();
+  }, [allUsers]);
+
+  // Apply filters and pagination to the data
   const { tableData, pagination } = useMemo(() => {
-    if (!leaderboardResponse?.leaderboard) {
+    if (!allPlayersData.length) {
       return { tableData: [], pagination: null };
     }
 
-    const processedData = leaderboardResponse.leaderboard.map((player) => {
-      const user = allUsers?.[player.playerId];
-      const isCurrentUser = currentUser?.uid === player.playerId;
+    let filteredData = [...allPlayersData];
+
+    // Apply search filter
+    if (search.trim()) {
+      filteredData = filteredData.filter(player =>
+        player.name.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    // Apply win rate filter
+    if (winRateRange[0] > 0 || winRateRange[1] < 100) {
+      filteredData = filteredData.filter(player => {
+        const winRatePercent = player.winRate * 100;
+        return winRatePercent >= winRateRange[0] && winRatePercent <= winRateRange[1];
+      });
+    }
+
+    // Apply matches minimum filter
+    if (matchesMin > 0) {
+      filteredData = filteredData.filter(player => player.totalMatches >= matchesMin);
+    }
+
+    // Apply streak minimum filter
+    if (streakMin > 0) {
+      filteredData = filteredData.filter(player => player.currentStreak >= streakMin);
+    }
+
+    // Calculate pagination
+    const totalCount = filteredData.length;
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedData = filteredData.slice(startIndex, endIndex);
+
+    // Process data for table
+    const processedData = paginatedData.map((player) => {
+      const isCurrentUser = currentUser?.uid === player.id;
       return {
-        id: player.playerId,
+        id: player.id,
         rank: `#${player.rank}${isCurrentUser ? " (You)" : ""}`,
-        playerName: user?.displayName || user?.name || "Unknown Player",
+        playerName: player.name,
         matches: player.totalMatches,
         winRate: `${Math.round(player.winRate * 100)}%`,
         record: `${player.wins}-${player.losses}`,
@@ -115,11 +180,20 @@ const PlayerRankingsCard = ({
       };
     });
 
+    const paginationInfo = totalPages > 1 ? {
+      currentPage: page,
+      totalPages,
+      totalCount,
+      pageSize,
+      hasPreviousPage: page > 1,
+      hasNextPage: page < totalPages
+    } : null;
+
     return {
       tableData: processedData,
-      pagination: leaderboardResponse.pagination,
+      pagination: paginationInfo,
     };
-  }, [leaderboardResponse, allUsers, currentUser]);
+  }, [allPlayersData, search, winRateRange, matchesMin, streakMin, page, pageSize, currentUser]);
 
   // Table columns configuration
   const columns = useMemo(
@@ -156,6 +230,7 @@ const PlayerRankingsCard = ({
                 user={{
                   photoURL: user?.photoURL || null,
                   displayName: row.playerName,
+                  useDefaultAvatar: user?.useDefaultAvatar
                 }}
                 size="sm"
                 className="me-2"
@@ -211,18 +286,9 @@ const PlayerRankingsCard = ({
     [allUsers, currentUser]
   );
 
-  // Add this right after the useMemo that creates tableData
-  console.log("🔍 DEBUG - Table Data Processing:", {
-    leaderboardResponse,
-    allUsers,
-    currentUser,
-    tableData,
-    pagination,
-  });
-
   // Loading and error states
-  const isLoading = leaderboardLoading || usersLoading;
-  const error = leaderboardError || usersError;
+  const isLoading = usersLoading || isLoadingStats;
+  const error = usersError || statsError;
 
   // Pagination component
   const renderPagination = () => {
@@ -310,14 +376,6 @@ const PlayerRankingsCard = ({
         />
       )}
 
-      {console.log("🔍 DEBUG - Passing to GenericTable:", {
-        columns,
-        tableData,
-        loading: isLoading,
-        error,
-        emptyMessage: "No players found matching your criteria.",
-      })}
-
       <GenericTable
         columns={columns}
         data={tableData}
@@ -332,3 +390,4 @@ const PlayerRankingsCard = ({
 };
 
 export default PlayerRankingsCard;
+

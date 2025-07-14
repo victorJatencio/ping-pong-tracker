@@ -16,7 +16,7 @@ import UserAvatar from "../../components/common/UserAvatar";
 import { Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import OngoingMatches from "../../components/dashboard/OngoingMatchesCard";
-import statsService from "../../services/statsService";
+import { useGetPlayerStatsFromBackendQuery } from "../../store/slices/apiSlice";
 import { db } from "../../config/firebase";
 import { collection, getDocs } from "firebase/firestore";
 
@@ -39,10 +39,18 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 const Dashboard = () => {
   const { currentUser } = useAuth();
 
-  // State for real data (keeping existing state for other cards)
+  // Use backend API for user stats
+  const { 
+    data: backendUserStats, 
+    isLoading: statsLoading, 
+    error: statsError 
+  } = useGetPlayerStatsFromBackendQuery(currentUser?.uid, {
+    skip: !currentUser?.uid
+  });
+
+  // State for other dashboard data (not user stats)
   const [dashboardData, setDashboardData] = useState({
-    userStats: null,
-    recentMatches: [], // This will be replaced by Redux data
+    recentMatches: [],
     upcomingMatches: [],
     pendingInvitations: [],
     achievements: [],
@@ -51,6 +59,7 @@ const Dashboard = () => {
     todaySchedule: [],
     performanceTrends: null,
   });
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -67,7 +76,7 @@ const Dashboard = () => {
 
   const firstName = getFirstName(currentUser);
 
-  // Simplified data loading without complex queries (keeping existing logic for other cards)
+  // Load dashboard data (excluding user stats which come from backend API)
   useEffect(() => {
     if (!currentUser?.uid) return;
 
@@ -77,12 +86,6 @@ const Dashboard = () => {
         setError("");
 
         console.log("Loading dashboard data for user:", currentUser.uid);
-
-        // Load user statistics
-        const userStats = await statsService.getPlayerProfileStats(
-          currentUser.uid
-        );
-        console.log("User stats loaded:", userStats);
 
         // Load ALL matches and filter in JavaScript (no complex queries)
         const allMatchesSnapshot = await getDocs(collection(db, "matches"));
@@ -127,15 +130,10 @@ const Dashboard = () => {
           .slice(0, 3);
         console.log("Upcoming matches:", upcomingMatches.length);
 
-        // Load other data...
-        // (keeping existing logic for other dashboard components)
-
         setDashboardData((prev) => ({
           ...prev,
-          userStats,
-          recentMatches, // Keep for other components that might need it
+          recentMatches,
           upcomingMatches,
-          // ... other data
         }));
       } catch (error) {
         console.error("Error loading dashboard data:", error);
@@ -150,8 +148,7 @@ const Dashboard = () => {
 
   // Destructure data for easier access
   const {
-    userStats,
-    recentMatches, // Keep for other components
+    recentMatches,
     upcomingMatches,
     pendingInvitations,
     achievements,
@@ -161,6 +158,16 @@ const Dashboard = () => {
     performanceTrends,
   } = dashboardData;
 
+  // Use backend stats as userStats
+  const userStats = backendUserStats;
+
+  // Combined loading state
+  const isLoading = loading || statsLoading;
+
+  // Combined error state
+  const hasError = error || statsError;
+  const displayError = error || (statsError ? "Failed to load user statistics" : "");
+
   // Mock data for components not yet refactored (keeping existing logic)
   const mockAchievements = [
     { id: 1, name: "First Win", icon: "🏆", unlocked: true },
@@ -168,7 +175,7 @@ const Dashboard = () => {
     { id: 3, name: "Win Streak", icon: "🔥", unlocked: false },
   ];
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div
         className="d-flex justify-content-center align-items-center"
@@ -184,12 +191,12 @@ const Dashboard = () => {
     );
   }
 
-  if (error) {
+  if (hasError) {
     return (
       <Container className="py-5">
         <div className="alert alert-danger" role="alert">
           <h4 className="alert-heading">Error Loading Dashboard</h4>
-          <p>{error}</p>
+          <p>{displayError}</p>
           <hr />
           <p className="mb-0">
             <Button
@@ -235,7 +242,7 @@ const Dashboard = () => {
 
               {/* Achievements Card */}
               <Col lg={4}>
-                <AchievementsCard playerStats={userStats} isLoading={loading} />
+                <AchievementsCard playerStats={userStats} isLoading={isLoading} />
               </Col>
             </Row>
 
@@ -268,3 +275,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

@@ -1,83 +1,108 @@
 // src/components/leaderboard/HallOfFameCard.jsx
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Badge, Row, Col } from 'react-bootstrap';
 import { 
-  useGetLeaderboardDataQuery, 
   useGetAllUsersQuery 
 } from '../../store/slices/apiSlice';
 import DashboardCard from '../common/Card';
 import UserAvatar from '../common/UserAvatar';
 
 const HallOfFameCard = ({ title = "Hall of Fame" }) => {
-  // Fetch leaderboard data (get all players for analysis)
+  // Get all users
   const { 
-    data: leaderboardResponse, 
-    error: leaderboardError, 
-    isLoading: leaderboardLoading 
-  } = useGetLeaderboardDataQuery({
-    filters: {
-      search: '',
-      winRateMin: 0,
-      winRateMax: 100,
-      matchesMin: 1, // Only players who have played matches
-      streakMin: 0,
-      timePeriod: 'all-time',
-      sortBy: 'rank',
-      sortOrder: 'asc'
-    },
-    pagination: { page: 1, pageSize: 100 } // Get enough data to analyze
-  });
-
-  // Fetch user data for names and avatars
-  const { 
-    data: allUsers, 
+    data: allUsers = {}, 
     error: usersError, 
     isLoading: usersLoading 
   } = useGetAllUsersQuery();
 
-  // Calculate Hall of Fame winners
-  const hallOfFameWinners = useMemo(() => {
-    if (!leaderboardResponse?.leaderboard?.length || !allUsers) {
-      return null;
-    }
+  // State for hall of fame data
+  const [hallOfFameWinners, setHallOfFameWinners] = useState(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [statsError, setStatsError] = useState(null);
 
-    const players = leaderboardResponse.leaderboard;
+  // Fetch stats for all users and calculate Hall of Fame winners
+  useEffect(() => {
+    const fetchHallOfFameData = async () => {
+      if (!allUsers || Object.keys(allUsers).length === 0) {
+        return;
+      }
 
-    // Find Most Wins (highest total wins)
-    const mostWinsPlayer = players.reduce((max, player) => 
-      player.wins > max.wins ? player : max
-    );
+      setIsLoadingStats(true);
+      setStatsError(null);
 
-    // Find Longest Streak (highest longestStreak)
-    const longestStreakPlayer = players.reduce((max, player) => 
-      player.longestStreak > max.longestStreak ? player : max
-    );
+      try {
+        const userIds = Object.keys(allUsers);
+        const playersWithStats = [];
 
-    // Find Most Active (highest total matches)
-    const mostActivePlayer = players.reduce((max, player) => 
-      player.totalMatches > max.totalMatches ? player : max
-    );
+        // Fetch stats for each user
+        for (const userId of userIds) {
+          try {
+            const response = await fetch(`http://localhost:5000/api/stats/player/${userId}`);
+            
+            if (response.ok) {
+              const result = await response.json();
+              const user = allUsers[userId];
+              
+              if (result.success && user && result.data.gamesPlayed > 0) {
+                const stats = result.data;
+                playersWithStats.push({
+                  id: userId,
+                  name: user.displayName || user.email?.split('@')[0] || 'Unknown Player',
+                  avatar: user.photoURL,
+                  useDefaultAvatar: user.useDefaultAvatar,
+                  wins: stats.totalWins || 0,
+                  totalMatches: stats.gamesPlayed || 0,
+                  losses: stats.totalLosses || 0,
+                  winRate: stats.gamesPlayed > 0 ? (stats.totalWins / stats.gamesPlayed) : 0,
+                  currentStreak: stats.winStreak || 0,
+                  longestStreak: stats.maxWinStreak || 0
+                });
+              }
+            } else {
+              console.warn(`Failed to fetch stats for user ${userId}:`, response.status);
+            }
+          } catch (error) {
+            console.warn(`Error fetching stats for user ${userId}:`, error);
+          }
+        }
 
-    // Helper function to get user info
-    const getUserInfo = (playerData) => {
-      const user = allUsers[playerData.playerId];
-      return {
-        id: playerData.playerId,
-        name: user?.displayName || user?.name || 'Unknown Player',
-        avatar: user?.photoURL || null,
-        ...playerData
-      };
+        if (playersWithStats.length > 0) {
+          // Find Most Wins (highest total wins)
+          const mostWinsPlayer = playersWithStats.reduce((max, player) => 
+            player.wins > max.wins ? player : max
+          );
+
+          // Find Longest Streak (highest maxWinStreak)
+          const longestStreakPlayer = playersWithStats.reduce((max, player) => 
+            player.longestStreak > max.longestStreak ? player : max
+          );
+
+          // Find Most Active (highest total matches)
+          const mostActivePlayer = playersWithStats.reduce((max, player) => 
+            player.totalMatches > max.totalMatches ? player : max
+          );
+
+          setHallOfFameWinners({
+            mostWins: mostWinsPlayer,
+            longestStreak: longestStreakPlayer,
+            mostActive: mostActivePlayer
+          });
+        } else {
+          setHallOfFameWinners(null);
+        }
+      } catch (error) {
+        console.error('Error fetching Hall of Fame data:', error);
+        setStatsError(error);
+      } finally {
+        setIsLoadingStats(false);
+      }
     };
 
-    return {
-      mostWins: getUserInfo(mostWinsPlayer),
-      longestStreak: getUserInfo(longestStreakPlayer),
-      mostActive: getUserInfo(mostActivePlayer)
-    };
-  }, [leaderboardResponse, allUsers]);
+    fetchHallOfFameData();
+  }, [allUsers]);
 
-  const isLoading = leaderboardLoading || usersLoading;
-  const error = leaderboardError || usersError;
+  const isLoading = usersLoading || isLoadingStats;
+  const error = usersError || statsError;
 
   if (isLoading) {
     return (
@@ -121,8 +146,9 @@ const HallOfFameCard = ({ title = "Hall of Fame" }) => {
       <div className="mb-2">
         <UserAvatar
           user={{ 
-            photoURL: player.avatar, 
-            displayName: player.name 
+            photoURL: player.avatar,
+            displayName: player.name,
+            useDefaultAvatar: player.useDefaultAvatar
           }}
           size="sm"
           className="border border-2"
@@ -170,8 +196,9 @@ const HallOfFameCard = ({ title = "Hall of Fame" }) => {
             <div className="mb-2">
               <UserAvatar
                 user={{ 
-                  photoURL: hallOfFameWinners.mostActive.avatar, 
-                  displayName: hallOfFameWinners.mostActive.name 
+                  photoURL: hallOfFameWinners.mostActive.avatar,
+                  displayName: hallOfFameWinners.mostActive.name,
+                  useDefaultAvatar: hallOfFameWinners.mostActive.useDefaultAvatar
                 }}
                 size="sm"
                 className="border border-2 border-success"
@@ -192,3 +219,4 @@ const HallOfFameCard = ({ title = "Hall of Fame" }) => {
 };
 
 export default HallOfFameCard;
+

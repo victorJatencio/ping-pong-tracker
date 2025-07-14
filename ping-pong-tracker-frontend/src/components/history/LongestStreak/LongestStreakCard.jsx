@@ -1,62 +1,23 @@
 // src/components/history/LongestStreakCard.jsx
-import React, { useContext, useMemo } from 'react';
+import React, { useContext } from 'react';
 import { AuthContext } from '../../../contexts/AuthContext';
-import { useGetUserMatchHistoryQuery } from '../../../store/slices/apiSlice';
+import { useGetPlayerStatsFromBackendQuery } from '../../../store/slices/apiSlice';
 import DashboardCard from '../../common/Card';
 
 const LongestStreakCard = ({ title = "Longest Streak" }) => {
   const { currentUser } = useContext(AuthContext);
 
-  // Fetch user's match history to calculate longest streak
+  // Use the working stats endpoint that we've already fixed
   const { 
-    data: matchHistoryResponse, 
+    data: statsResponse, 
     error, 
     isLoading 
-  } = useGetUserMatchHistoryQuery({
-    userId: currentUser?.uid,
-    filters: {
-      result: 'all',
-      startDate: null,
-      endDate: null,
-      sortBy: 'date',
-      sortOrder: 'asc' // Order by oldest first to calculate streak chronologically
-    },
-    pagination: { page: 1, pageSize: 1000 } // Get all matches for accurate calculation
-  }, {
+  } = useGetPlayerStatsFromBackendQuery(currentUser?.uid, {
     skip: !currentUser?.uid
   });
 
-  // Calculate longest winning streak
-  const longestStreak = useMemo(() => {
-    if (!matchHistoryResponse?.matches || matchHistoryResponse.matches.length === 0) {
-      return 0;
-    }
-
-    const matches = matchHistoryResponse.matches;
-    let currentStreak = 0;
-    let maxStreak = 0;
-
-    // Sort matches by date to ensure chronological order
-    const sortedMatches = [...matches].sort((a, b) => {
-      const dateA = new Date(a.completedDate);
-      const dateB = new Date(b.completedDate);
-      return dateA - dateB;
-    });
-
-    // Calculate streaks
-    for (const match of sortedMatches) {
-      if (match.winnerId === currentUser?.uid) {
-        // User won this match - increment current streak
-        currentStreak++;
-        maxStreak = Math.max(maxStreak, currentStreak);
-      } else {
-        // User lost this match - reset current streak
-        currentStreak = 0;
-      }
-    }
-
-    return maxStreak;
-  }, [matchHistoryResponse, currentUser]);
+  // Get longest streak from the backend stats
+  const longestStreak = statsResponse?.data?.maxWinStreak || 0;
 
   // Get streak description
   const getStreakDescription = (streak) => {
@@ -74,6 +35,15 @@ const LongestStreakCard = ({ title = "Longest Streak" }) => {
     if (streak < 5) return 'text-warning';
     if (streak < 10) return 'text-info';
     return 'text-danger'; // For very long streaks
+  };
+
+  // Get streak icon based on length
+  const getStreakIcon = (streak) => {
+    if (streak === 0) return '😐';
+    if (streak < 3) return '🔥';
+    if (streak < 5) return '🚀';
+    if (streak < 10) return '⚡';
+    return '👑';
   };
 
   if (isLoading) {
@@ -104,7 +74,7 @@ const LongestStreakCard = ({ title = "Longest Streak" }) => {
         {/* Streak Icon */}
         <div className="mb-2">
           <span className="fs-1">
-            {longestStreak === 0 ? '😐' : longestStreak < 3 ? '🔥' : longestStreak < 5 ? '🚀' : longestStreak < 10 ? '⚡' : '👑'}
+            {getStreakIcon(longestStreak)}
           </span>
         </div>
 
@@ -117,6 +87,13 @@ const LongestStreakCard = ({ title = "Longest Streak" }) => {
         <p className="text-muted mb-1">
           {getStreakDescription(longestStreak)}
         </p>
+
+        {/* Additional Info */}
+        {statsResponse?.data && (
+          <small className="text-muted d-block mb-2">
+            Current streak: {statsResponse.data.winStreak || 0}
+          </small>
+        )}
 
         {/* Encouragement Message */}
         {longestStreak === 0 ? (

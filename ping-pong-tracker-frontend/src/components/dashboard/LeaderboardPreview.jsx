@@ -1,10 +1,8 @@
-import React, { useContext, useMemo } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../../contexts/AuthContext";
 import { 
-  useGetLeaderboardPreviewQuery,
-  useGetAllUsersQuery,  // ✅ ADD: Get complete user data
-  useGetUserProfileQuery
+  useGetAllUsersQuery
 } from "../../store/slices/apiSlice";
 import UserAvatar from "../common/UserAvatar";
 import "./LeaderboardPreview.scss";
@@ -13,58 +11,95 @@ const LeaderboardPreview = () => {
   const navigate = useNavigate();
   const { currentUser } = useContext(AuthContext);
 
-  // Get current user profile data via RTK Query
-  const { 
-    data: currentUserProfile,
-    isLoading: isLoadingCurrentUser 
-  } = useGetUserProfileQuery(currentUser?.uid, {
-    skip: !currentUser?.uid
-  });
-
-  // Get leaderboard data (basic info)
-  const {
-    data: leaderboard = [],
-    isLoading: isLoadingLeaderboard,
-    error,
-    refetch,
-  } = useGetLeaderboardPreviewQuery();
-
-  // ✅ SOLUTION: Get complete user data for avatars
+  // Get all users
   const {
     data: allUsers = {},
     isLoading: isLoadingUsers,
+    error: usersError
   } = useGetAllUsersQuery();
 
-  // Use profile data for current user ID comparison
-  const displayUser = currentUserProfile || currentUser;
-  const currentUserId = displayUser?.uid || currentUser?.uid;
+  // State for leaderboard data
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [statsError, setStatsError] = useState(null);
 
-  // ✅ SOLUTION: Merge leaderboard data with complete user data
-  const enrichedLeaderboard = useMemo(() => {
-    if (!leaderboard.length || !Object.keys(allUsers).length) {
-      return leaderboard;
-    }
+  // Get current user ID
+  const currentUserId = currentUser?.uid;
 
-    return leaderboard.map(entry => {
-      const completeUserData = allUsers[entry.player.id];
-      
-      console.log("🔍 SOLUTION DEBUG - Merging data:");
-      console.log("  - Leaderboard player:", entry.player);
-      console.log("  - Complete user data:", completeUserData);
-      console.log("  - photoURL:", completeUserData?.photoURL);
+  // Fetch stats for all users manually (avoiding hooks in loops)
+  useEffect(() => {
+    const fetchAllPlayerStats = async () => {
+      if (!allUsers || Object.keys(allUsers).length === 0) {
+        return;
+      }
 
-      return {
-        ...entry,
-        player: {
-          ...entry.player,
-          // ✅ MERGE: Add complete user data including avatar
-          ...completeUserData,
-          // Keep leaderboard-specific fields
-          displayName: entry.player.displayName || completeUserData?.displayName,
+      setIsLoadingStats(true);
+      setStatsError(null);
+
+      try {
+        const userIds = Object.keys(allUsers);
+        const playersWithStats = [];
+
+        // Fetch stats for each user sequentially
+        for (const userId of userIds) {
+          try {
+            const response = await fetch(`http://localhost:5000/api/stats/player/${userId}`);
+            
+            if (response.ok) {
+              const result = await response.json();
+              const user = allUsers[userId];
+              
+              if (result.success && user) {
+                playersWithStats.push({
+                  player: {
+                    id: userId,
+                    displayName: user.displayName || user.email?.split('@')[0] || 'Unknown Player',
+                    photoURL: user.photoURL,
+                    email: user.email,
+                    useDefaultAvatar: user.useDefaultAvatar
+                  },
+                  stats: {
+                    totalWins: result.data.totalWins || 0,
+                    gamesPlayed: result.data.gamesPlayed || 0,
+                    winStreak: result.data.winStreak || 0
+                  }
+                });
+              }
+            } else {
+              console.warn(`Failed to fetch stats for user ${userId}:`, response.status);
+            }
+          } catch (error) {
+            console.warn(`Error fetching stats for user ${userId}:`, error);
+          }
         }
-      };
-    });
-  }, [leaderboard, allUsers]);
+
+        // Sort by total wins (descending), then by games played (ascending as tiebreaker)
+        const sortedPlayers = playersWithStats
+          .sort((a, b) => {
+            if (b.stats.totalWins !== a.stats.totalWins) {
+              return b.stats.totalWins - a.stats.totalWins;
+            }
+            return a.stats.gamesPlayed - b.stats.gamesPlayed;
+          })
+          .slice(0, 5); // Top 5 players for preview
+
+        // Add position numbers
+        const leaderboardWithPositions = sortedPlayers.map((player, index) => ({
+          ...player,
+          position: index + 1
+        }));
+
+        setLeaderboard(leaderboardWithPositions);
+      } catch (error) {
+        console.error('Error fetching leaderboard data:', error);
+        setStatsError(error);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchAllPlayerStats();
+  }, [allUsers]);
 
   const getPositionText = (position) => {
     switch (position) {
@@ -83,8 +118,8 @@ const LeaderboardPreview = () => {
     navigate("/leaderboard");
   };
 
-  // Include all loading states
-  if (isLoadingLeaderboard || isLoadingUsers || isLoadingCurrentUser) {
+  // Loading state
+  if (isLoadingUsers || isLoadingStats) {
     return (
       <div className="leaderboard-preview">
         <div className="leaderboard-preview__header">
@@ -100,7 +135,8 @@ const LeaderboardPreview = () => {
     );
   }
 
-  if (error) {
+  // Error state
+  if (usersError || statsError) {
     return (
       <div className="leaderboard-preview">
         <div className="leaderboard-preview__header">
@@ -110,7 +146,7 @@ const LeaderboardPreview = () => {
           <div className="leaderboard-preview__error">
             <p>Failed to load leaderboard</p>
             <button
-              onClick={refetch}
+              onClick={() => window.location.reload()}
               className="leaderboard-preview__retry-btn"
             >
               Try Again
@@ -121,7 +157,8 @@ const LeaderboardPreview = () => {
     );
   }
 
-  if (!enrichedLeaderboard || enrichedLeaderboard.length === 0) {
+  // Empty state
+  if (!leaderboard || leaderboard.length === 0) {
     return (
       <div className="leaderboard-preview">
         <div className="leaderboard-preview__header">
@@ -147,12 +184,8 @@ const LeaderboardPreview = () => {
 
       <div className="leaderboard-preview__content">
         <div className="leaderboard-preview__list">
-          {enrichedLeaderboard.map((entry) => {
+          {leaderboard.map((entry) => {
             const isCurrentUser = entry.player.id === currentUserId;
-
-            console.log("🔍 SOLUTION DEBUG - Rendering entry:");
-            console.log("  - Player with complete data:", entry.player);
-            console.log("  - photoURL:", entry.player.photoURL);
 
             return (
               <div
@@ -163,9 +196,13 @@ const LeaderboardPreview = () => {
               >
                 <div className="leaderboard-preview__player">
                   <div className="leaderboard-preview__avatar">
-                    {/* ✅ SOLUTION: Use the same pattern that works in RecentActivityCard */}
                     <UserAvatar
-                      user={{ photoURL: entry.player.photoURL }}
+                      user={{
+                        photoURL: entry.player.photoURL,
+                        displayName: entry.player.displayName,
+                        email: entry.player.email,
+                        useDefaultAvatar: entry.player.useDefaultAvatar
+                      }}
                       size="small"
                     />
                   </div>
