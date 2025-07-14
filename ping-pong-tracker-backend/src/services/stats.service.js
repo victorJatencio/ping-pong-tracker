@@ -93,7 +93,54 @@ class StatsService {
 
     // Calculate stats from each match
     for (const match of sortedMatches) {
-      const isWinner = match.winnerId === playerId;
+      let isWinner = false;
+
+      // Method 1: Check winnerId field (if not null)
+      if (match.winnerId && match.winnerId !== null) {
+        isWinner = match.winnerId === playerId;
+      }
+      // Method 2: Calculate from scores (fallback for null winnerId)
+      else if (
+        match.player1Id &&
+        match.player2Id &&
+        match.player1Score !== undefined &&
+        match.player2Score !== undefined
+      ) {
+        // Convert scores to numbers to ensure proper comparison
+        const player1Score = parseInt(match.player1Score) || 0;
+        const player2Score = parseInt(match.player2Score) || 0;
+
+        if (match.player1Id === playerId) {
+          // Current player is player1
+          isWinner = player1Score > player2Score;
+        } else if (match.player2Id === playerId) {
+          // Current player is player2
+          isWinner = player2Score > player1Score;
+        }
+
+        // Log for debugging
+        console.log(
+          `Match ${match.id}: winnerId was null, calculated from scores`
+        );
+        console.log(`  Player1 (${match.player1Id}): ${player1Score}`);
+        console.log(`  Player2 (${match.player2Id}): ${player2Score}`);
+        console.log(`  Current player (${playerId}) is winner: ${isWinner}`);
+      }
+      // Method 3: Check loserId field (if winnerId is null but loserId exists)
+      else if (match.loserId && match.loserId !== null) {
+        isWinner = match.loserId !== playerId; // If not the loser, then winner
+      } else {
+        // Unable to determine winner - log warning
+        console.warn(`Unable to determine winner for match ${match.id}:`, {
+          winnerId: match.winnerId,
+          loserId: match.loserId,
+          player1Id: match.player1Id,
+          player2Id: match.player2Id,
+          player1Score: match.player1Score,
+          player2Score: match.player2Score,
+        });
+        continue; // Skip this match
+      }
 
       if (isWinner) {
         totalWins++;
@@ -242,29 +289,101 @@ class StatsService {
    * @param {string} playerId - The player ID
    * @returns {Promise<Object>} Player statistics
    */
+  /**
+   * Get player statistics (FIXED - uses correct field names)
+   * @param {string} playerId - The player ID
+   * @returns {Promise<Object>} Player statistics calculated from matches
+   */
   async getPlayerStats(playerId) {
     try {
+      logger.info(
+        `Getting player stats for: ${playerId} (calculating from matches)`
+      );
       const db = this.getDb();
-      const playerStatsDoc = await db
-        .collection("playerStats")
-        .doc(playerId)
+
+      // Get ALL completed matches first (no participants filter)
+      const matchesSnapshot = await db
+        .collection("matches")
+        .where("status", "==", "completed")
         .get();
 
-      if (!playerStatsDoc.exists) {
-        logger.info(
-          `No stats found for player ${playerId}, creating empty stats`
-        );
-        return await this.createEmptyPlayerStats(playerId);
+      if (matchesSnapshot.empty) {
+        logger.info(`No completed matches found in database`);
+        return this.createEmptyPlayerStats(playerId);
       }
 
-      return {
-        id: playerStatsDoc.id,
-        ...playerStatsDoc.data(),
+      // Filter matches for this player in JavaScript
+      let matches = matchesSnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter(
+          (match) =>
+            match.player1Id === playerId || match.player2Id === playerId
+        );
+
+      if (matches.length === 0) {
+        logger.info(`No matches found for player: ${playerId}`);
+        return this.createEmptyPlayerStats(playerId);
+      }
+
+      // Sort matches in JavaScript
+      matches = matches.sort((a, b) => {
+        const dateA = a.completedDate?.toDate?.() || new Date(a.completedDate);
+        const dateB = b.completedDate?.toDate?.() || new Date(b.completedDate);
+        return dateA - dateB;
+      });
+
+      logger.info(
+        `Found ${matches.length} completed matches for player: ${playerId}`
+      );
+
+      const calculatedStats = this.calculatePlayerStats(playerId, matches);
+
+      const finalStats = {
+        ...calculatedStats,
+        dataSource: "matches",
+        calculatedAt: new Date().toISOString(),
+        matchCount: matches.length,
+        lastMatchDate:
+          matches.length > 0 ? matches[matches.length - 1].completedDate : null,
       };
+
+      logger.info(`Stats calculated successfully for player ${playerId}:`, {
+        totalWins: finalStats.totalWins,
+        gamesPlayed: finalStats.gamesPlayed,
+        winStreak: finalStats.winStreak,
+        dataSource: finalStats.dataSource,
+        matchCount: finalStats.matchCount,
+      });
+
+      return finalStats;
     } catch (error) {
-      logger.error(`Error getting stats for player ${playerId}:`, error);
+      logger.error(`Error getting player stats for ${playerId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Create empty player stats for players with no matches
+   * @param {string} playerId - The player ID
+   * @returns {Object} Empty stats object
+   */
+  createEmptyPlayerStats(playerId) {
+    return {
+      playerId,
+      totalWins: 0,
+      gamesPlayed: 0,
+      winStreak: 0,
+      maxWinStreak: 0,
+      totalLosses: 0,
+      dataSource: "matches",
+      calculatedAt: new Date().toISOString(),
+      matchCount: 0,
+      lastMatchDate: null,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    };
   }
 
   /**
