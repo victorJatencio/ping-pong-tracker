@@ -1,21 +1,18 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { AuthContext } from "../../contexts/AuthContext";
-import {
-  useGetPendingInvitationsQuery,
-  useGetAllUsersQuery,
-  // useAcceptInvitationMutation,
-  // useDeclineInvitationMutation,
-} from "../../store/slices/apiSlice";
+import { useGetAllUsersQuery } from "../../store/slices/apiSlice";
 import DashboardCard from "../common/Card";
 import UserAvatar from "../../components/common/UserAvatar";
 import Modal from "../common/Modal";
 import "./PendingInvitationsCard.scss";
 
+// Firebase imports for real-time sync
 import {
   collection,
   query,
   where,
-  getDocs,
+  orderBy,
+  onSnapshot,
   doc,
   updateDoc,
   serverTimestamp,
@@ -24,163 +21,346 @@ import { db } from "../../config/firebase";
 
 const PendingInvitationsCard = () => {
   const { currentUser } = useContext(AuthContext);
+  const [invitations, setInvitations] = useState([]);
   const [enrichedInvitations, setEnrichedInvitations] = useState([]);
   const [selectedInvitation, setSelectedInvitation] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  // Add the missing state variable for tracking removing items
   const [removingId, setRemovingId] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  // Log currentUser.uid when the component renders
-  useEffect(() => {
-    console.log("PendingInvitationsCard: currentUser.uid:", currentUser?.uid);
-  }, [currentUser]);
-
-  const {
-    data: invitationsData,
-    isLoading: invitationsLoading,
-    error: invitationsError,
-    refetch: refetchInvitations,
-  } = useGetPendingInvitationsQuery(currentUser?.uid, {
-    skip: !currentUser?.uid,
-  });
+  // Use ref to track the unsubscribe function
+  const unsubscribeRef = useRef(null);
 
   const { data: usersData, isLoading: usersLoading } = useGetAllUsersQuery();
 
-  // const [acceptInvitation, { isLoading: isAccepting }] =
-  //   useAcceptInvitationMutation();
-  // const [declineInvitation, { isLoading: isDeclining }] =
-  //   useDeclineInvitationMutation();
-
+  // Real-time Firebase listener for invitations with proper cleanup
   useEffect(() => {
-    if (invitationsData && usersData) {
-      console.log("🔍 AVATAR DEBUG - Raw usersData sample:", Object.values(usersData)[0]);
+    // Clean up any existing listener first
+    if (unsubscribeRef.current) {
+      console.log('📋 Cleaning up existing invitation listener');
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+
+    // Reset state when no user
+    if (!currentUser?.uid) {
+      console.log('📋 No authenticated user, clearing invitations');
+      setInvitations([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    console.log('📋 PendingInvitations: Setting up real-time listener for user:', currentUser.uid);
+
+    // Query the "invitations" collection with "recipientId" field (same as NotificationBell)
+    const invitationsRef = collection(db, 'invitations');
+    
+    // First try with orderBy, if it fails due to missing index, try without
+    let q;
+    try {
+      q = query(
+        invitationsRef,
+        where('recipientId', '==', currentUser.uid),
+        orderBy('createdAt', 'desc')
+      );
+    } catch (indexError) {
+      console.log('📋 OrderBy failed, trying without orderBy:', indexError);
+      q = query(
+        invitationsRef,
+        where('recipientId', '==', currentUser.uid)
+      );
+    }
+
+    // Set up real-time listener with proper error handling
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        // Check if user is still authenticated
+        if (!currentUser?.uid) {
+          console.log('📋 User no longer authenticated, ignoring snapshot');
+          return;
+        }
+
+        const invitationsData = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          console.log('📋 Found invitation:', { 
+            firestoreDocId: doc.id, 
+            dataId: data.id,
+            status: data.status,
+            ...data 
+          });
+          
+          // Use the actual Firestore document ID, not the data.id field
+          invitationsData.push({
+            firestoreDocId: doc.id, // This is the real document ID for updates
+            ...data
+          });
+        });
+
+        // Sort manually if we couldn't use orderBy
+        invitationsData.sort((a, b) => {
+          const aTime = a.createdAt?.seconds || 0;
+          const bTime = b.createdAt?.seconds || 0;
+          return bTime - aTime; // Newest first
+        });
+
+        // Filter out invitations that have been responded to (accepted/declined)
+        const pendingInvitations = invitationsData.filter(inv => 
+          !inv.status || inv.status === 'pending' || inv.status === 'sent'
+        );
+
+        console.log('📋 Real-time invitations update:', pendingInvitations.length);
+        setInvitations(pendingInvitations);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('📋 Error listening to invitations:', err);
+        
+        // Handle permission denied errors gracefully (common during logout)
+        if (err.code === 'permission-denied') {
+          console.log('📋 Permission denied - likely due to authentication state change');
+          setInvitations([]);
+          setLoading(false);
+          setError(null); // Don't show error for permission issues during auth transitions
+          return;
+        }
+        
+        // If orderBy fails due to missing index, try without orderBy
+        if (err.code === 'failed-precondition' && err.message.includes('index')) {
+          console.log('📋 Retrying without orderBy due to missing index...');
+          
+          const simpleQuery = query(
+            invitationsRef,
+            where('recipientId', '==', currentUser.uid)
+          );
+          
+          const retryUnsubscribe = onSnapshot(
+            simpleQuery,
+            (querySnapshot) => {
+              // Check if user is still authenticated
+              if (!currentUser?.uid) {
+                console.log('📋 User no longer authenticated, ignoring retry snapshot');
+                return;
+              }
+
+              const invitationsData = [];
+              querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                console.log('📋 Found invitation (retry):', { 
+                  firestoreDocId: doc.id, 
+                  dataId: data.id,
+                  status: data.status,
+                  ...data 
+                });
+                
+                // Use the actual Firestore document ID, not the data.id field
+                invitationsData.push({
+                  firestoreDocId: doc.id, // This is the real document ID for updates
+                  ...data
+                });
+              });
+
+              // Sort manually by createdAt
+              invitationsData.sort((a, b) => {
+                const aTime = a.createdAt?.seconds || 0;
+                const bTime = b.createdAt?.seconds || 0;
+                return bTime - aTime; // Newest first
+              });
+
+              // Filter out invitations that have been responded to
+              const pendingInvitations = invitationsData.filter(inv => 
+                !inv.status || inv.status === 'pending' || inv.status === 'sent'
+              );
+
+              console.log('📋 Real-time invitations update (retry):', pendingInvitations.length);
+              setInvitations(pendingInvitations);
+              setLoading(false);
+            },
+            (retryErr) => {
+              console.error('📋 Error on retry:', retryErr);
+              
+              // Handle permission denied errors gracefully
+              if (retryErr.code === 'permission-denied') {
+                console.log('📋 Permission denied on retry - likely due to authentication state change');
+                setInvitations([]);
+                setLoading(false);
+                setError(null);
+                return;
+              }
+              
+              setError(retryErr.message);
+              setLoading(false);
+            }
+          );
+          
+          // Store the retry unsubscribe function
+          unsubscribeRef.current = retryUnsubscribe;
+          return;
+        } else {
+          setError(err.message);
+          setLoading(false);
+        }
+      }
+    );
+
+    // Store the unsubscribe function
+    unsubscribeRef.current = unsubscribe;
+
+    // Cleanup function
+    return () => {
+      if (unsubscribeRef.current) {
+        console.log('📋 Cleaning up invitation listener on unmount/dependency change');
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [currentUser?.uid]); // Only depend on currentUser.uid
+
+  // Additional cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      if (unsubscribeRef.current) {
+        console.log('📋 Final cleanup on component unmount');
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, []);
+
+  // Enrich invitations with user data
+  useEffect(() => {
+    if (invitations.length > 0 && usersData) {
+      console.log("📋 AVATAR DEBUG - Raw usersData sample:", Object.values(usersData)[0]);
       
-      const enriched = invitationsData.map((invitation) => {
-        const sender = usersData[invitation.senderId];
-        console.log("🔍 AVATAR DEBUG - Sender data for", invitation.senderId, ":", sender);
+      const enriched = invitations.map((invitation) => {
+        const senderId = invitation.senderId || invitation.id;
+        const sender = usersData[senderId];
+        console.log("📋 AVATAR DEBUG - Sender data for", senderId, ":", sender);
         
         return {
           ...invitation,
           sender: sender || {
-            uid: invitation.senderId,
+            uid: senderId,
             displayName: "Unknown User",
-            photoURL: null, // ✅ FIXED: Use photoURL instead of profileImageUrl
-            useDefaultAvatar: true, // ✅ FIXED: Add useDefaultAvatar flag
-            email: `user-${invitation.senderId}@example.com`, // Fallback for avatar generation
+            photoURL: null,
+            useDefaultAvatar: true,
+            email: `user-${senderId}@example.com`,
           },
         };
       });
       
-      console.log("🔍 AVATAR DEBUG - Enriched invitations:", enriched);
+      console.log("📋 AVATAR DEBUG - Enriched invitations:", enriched);
       setEnrichedInvitations(enriched);
+    } else {
+      setEnrichedInvitations([]);
     }
-  }, [invitationsData, usersData]);
+  }, [invitations, usersData]);
 
   const clearMessages = () => {
     setError(null);
     setSuccessMessage(null);
   };
 
-  const handleAccept = async (invitationId) => {
+  const handleAccept = async (invitation) => {
+    // Check if user is still authenticated
+    if (!currentUser?.uid) {
+      console.log('📋 Cannot accept invitation - user not authenticated');
+      return;
+    }
+
     clearMessages();
     setIsProcessing(true);
-    setRemovingId(invitationId);
-    console.log(`Accepting invitation: ${invitationId}`);
+    setRemovingId(invitation.firestoreDocId);
+    console.log(`📋 Accepting invitation:`, {
+      firestoreDocId: invitation.firestoreDocId,
+      dataId: invitation.id,
+      currentStatus: invitation.status
+    });
 
     setTimeout(async () => {
       try {
-        // Get the actual document ID first
-        const invitationsRef = collection(db, "invitations");
-        const q = query(invitationsRef, where("id", "==", invitationId));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-          setError(
-            "Invitation not found. It may have been deleted or expired."
-          );
-          setRemovingId(null); // Reset on error
-          setIsProcessing(false);
-          return;
-        }
-
-        // Get the actual document ID and directly update it
-        const docSnapshot = querySnapshot.docs[0];
-        const actualDocId = docSnapshot.id;
-        console.log("Found actual document ID:", actualDocId);
-
-        // Directly update the document
-        const docRef = doc(db, "invitations", actualDocId);
-        await updateDoc(docRef, {
-          status: "accepted",
+        // Use the actual Firestore document ID for the update (same as NotificationBell)
+        const invitationRef = doc(db, 'invitations', invitation.firestoreDocId);
+        await updateDoc(invitationRef, {
+          status: 'accepted',
+          respondedAt: new Date(),
           updatedAt: serverTimestamp(),
         });
 
+        console.log('📋 Invitation accepted successfully - status updated to "accepted"');
         setSuccessMessage("Invitation accepted!");
         setIsModalOpen(false);
-        refetchInvitations();
       } catch (err) {
-        setError("Failed to accept invitation. Please try again.");
-        console.error("Accept Invitation Error:", err);
-        setRemovingId(null); // Reset on error
+        console.error("📋 Accept Invitation Error:", err);
+        
+        // Handle permission errors gracefully
+        if (err.code === 'permission-denied') {
+          console.log('📋 Permission denied while accepting - user may have been logged out');
+          setError("Unable to accept invitation. Please try logging in again.");
+        } else {
+          setError("Failed to accept invitation. Please try again.");
+        }
+        
+        setRemovingId(null);
       } finally {
-        setIsProcessing(false); // Reset processing state when done
+        setIsProcessing(false);
       }
     }, 300);
   };
 
-  const handleDecline = async (invitationId) => {
+  const handleDecline = async (invitation) => {
+    // Check if user is still authenticated
+    if (!currentUser?.uid) {
+      console.log('📋 Cannot decline invitation - user not authenticated');
+      return;
+    }
+
     clearMessages();
     setIsProcessing(true);
-    setRemovingId(invitationId); // Add this line to set removing ID for animation
-    console.log(`Declining invitation: ${invitationId}`);
+    setRemovingId(invitation.firestoreDocId);
+    console.log(`📋 Declining invitation:`, {
+      firestoreDocId: invitation.firestoreDocId,
+      dataId: invitation.id,
+      currentStatus: invitation.status
+    });
 
-    setTimeout(async () => { // Wrap in setTimeout for animation
+    setTimeout(async () => {
       try {
-        // Get the actual document ID first
-        const invitationsRef = collection(db, "invitations");
-        const q = query(invitationsRef, where("id", "==", invitationId));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-          setError("Invitation not found. It may have been deleted or expired.");
-          setRemovingId(null); // Reset on error
-          setIsProcessing(false);
-          return;
-        }
-
-        // Get the actual document ID and directly update it
-        const docSnapshot = querySnapshot.docs[0];
-        const actualDocId = docSnapshot.id;
-        console.log("Found actual document ID:", actualDocId);
-
-        // Directly update the document
-        const docRef = doc(db, "invitations", actualDocId);
-        await updateDoc(docRef, {
-          status: "declined",
+        // Use the actual Firestore document ID for the update (same as NotificationBell)
+        const invitationRef = doc(db, 'invitations', invitation.firestoreDocId);
+        await updateDoc(invitationRef, {
+          status: 'declined',
+          respondedAt: new Date(),
           updatedAt: serverTimestamp(),
         });
 
+        console.log('📋 Invitation declined successfully - status updated to "declined"');
         setSuccessMessage("Invitation declined.");
         setIsModalOpen(false);
-        refetchInvitations();
       } catch (err) {
-        setError("Failed to decline invitation. Please try again.");
-        console.error("Decline Invitation Error:", err);
-        setRemovingId(null); // Reset on error
+        console.error("📋 Decline Invitation Error:", err);
+        
+        // Handle permission errors gracefully
+        if (err.code === 'permission-denied') {
+          console.log('📋 Permission denied while declining - user may have been logged out');
+          setError("Unable to decline invitation. Please try logging in again.");
+        } else {
+          setError("Failed to decline invitation. Please try again.");
+        }
+        
+        setRemovingId(null);
       } finally {
         setIsProcessing(false);
       }
-    }, 300); // Match the CSS transition duration
-  };
-
-  const retryOperation = () => {
-    setError(null);
-    setSuccessMessage(null);
-    // Optionally refresh data
-    refetchInvitations();
+    }, 300);
   };
 
   const openInvitationModal = (invitation) => {
@@ -198,7 +378,8 @@ const PendingInvitationsCard = () => {
     if (!date) return "Date TBD";
 
     try {
-      const scheduleDate = new Date(date);
+      // Handle both Firestore timestamp and regular date
+      const scheduleDate = date.seconds ? new Date(date.seconds * 1000) : new Date(date);
       const now = new Date();
       const isToday = scheduleDate.toDateString() === now.toDateString();
       const isTomorrow =
@@ -234,9 +415,9 @@ const PendingInvitationsCard = () => {
     }
   };
 
-  const isLoading = invitationsLoading || usersLoading || isProcessing;
+  const isLoading = loading || usersLoading || isProcessing;
 
-  if (invitationsLoading || usersLoading) {
+  if (loading || usersLoading) {
     return (
       <DashboardCard title="Pending Invitations">
         <div className="pending-invitations-loading">
@@ -265,7 +446,6 @@ const PendingInvitationsCard = () => {
           <div className="alert alert-error">
             <p>{error}</p>
             <div className="alert-actions">
-              <button onClick={retryOperation}>Retry</button>
               <button onClick={() => setError(null)}>×</button>
             </div>
           </div>
@@ -281,26 +461,25 @@ const PendingInvitationsCard = () => {
         {enrichedInvitations.length > 0 ? (
           <div className="pending-invitations-list">
             {enrichedInvitations.slice(0, 3).map((invitation) => {
-              // ✅ FIXED: Create proper avatar data with useDefaultAvatar logic
+              // Create proper avatar data with useDefaultAvatar logic
               const avatarData = {
                 photoURL: (!invitation.sender.useDefaultAvatar && invitation.sender.photoURL) ? invitation.sender.photoURL : null,
                 displayName: invitation.sender.displayName,
                 email: invitation.sender.email,
               };
               
-              console.log("🔍 AVATAR DEBUG - Avatar data being passed to UserAvatar:", avatarData);
+              console.log("📋 AVATAR DEBUG - Avatar data being passed to UserAvatar:", avatarData);
               
               return (
                 <div
-                  key={invitation.id}
+                  key={invitation.firestoreDocId}
                   className={`pending-invitation-preview ${
-                    removingId === invitation.id ? "removing" : ""
+                    removingId === invitation.firestoreDocId ? "removing" : ""
                   }`}
                   onClick={() => openInvitationModal(invitation)}
                 >
                   <div className="invitation-sender">
                     <div className="sender-avatar">
-                      {/* ✅ FIXED: Use photoURL field instead of profileImage */}
                       <UserAvatar
                         user={avatarData}
                         size="small"
@@ -314,7 +493,7 @@ const PendingInvitationsCard = () => {
                     </div>
                   </div>
                   <div className="invitation-time">
-                    {formatScheduledDate(invitation.scheduledDate)}
+                    {invitation.time || formatScheduledDate(invitation.scheduledDate)}
                   </div>
                 </div>
               );
@@ -340,7 +519,6 @@ const PendingInvitationsCard = () => {
           <div className="invitation-modal-content">
             <div className="invitation-modal-header">
               <div className="sender-info-modal">
-                {/* ✅ FIXED: Use photoURL field and useDefaultAvatar logic in modal */}
                 <UserAvatar
                   user={{
                     photoURL: (!selectedInvitation.sender.useDefaultAvatar && selectedInvitation.sender.photoURL) ? selectedInvitation.sender.photoURL : null,
@@ -366,7 +544,7 @@ const PendingInvitationsCard = () => {
 
               <div className="invitation-schedule">
                 <h4>Scheduled Time:</h4>
-                <p>{formatScheduledDate(selectedInvitation.scheduledDate)}</p>
+                <p>{selectedInvitation.time || formatScheduledDate(selectedInvitation.scheduledDate)}</p>
               </div>
 
               {selectedInvitation.location && (
@@ -380,14 +558,14 @@ const PendingInvitationsCard = () => {
             <div className="invitation-modal-actions">
               <button
                 className="decline-button"
-                onClick={() => handleDecline(selectedInvitation.id)}
+                onClick={() => handleDecline(selectedInvitation)}
                 disabled={isProcessing}
               >
                 {isProcessing ? "Processing..." : "Decline"}
               </button>
               <button
                 className="accept-button"
-                onClick={() => handleAccept(selectedInvitation.id)}
+                onClick={() => handleAccept(selectedInvitation)}
                 disabled={isProcessing}
               >
                 {isProcessing ? "Processing..." : "Accept"}
@@ -401,3 +579,4 @@ const PendingInvitationsCard = () => {
 };
 
 export default PendingInvitationsCard;
+

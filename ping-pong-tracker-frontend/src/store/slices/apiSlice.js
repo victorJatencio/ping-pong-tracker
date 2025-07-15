@@ -20,7 +20,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { db, storage } from "../../config/firebase";
+import { db, storage, auth } from "../../config/firebase";
 
 // Helper function to safely convert Firebase Timestamps to ISO strings
 const convertTimestamps = (obj) => {
@@ -151,17 +151,97 @@ export const apiSlice = createApi({
     // ========================================
     // EXISTING FIREBASE ENDPOINTS (Keep as-is)
     // ========================================
+    // getAllUsers: builder.query({
+    //   query: () => ({
+    //     collection: "users",
+    //   }),
+    //   providesTags: ["User"],
+    //   transformResponse: (response) => {
+    //     console.log("🔍 getAllUsers Debug:");
+    //     console.log("  - Raw response:", response);
+
+    //     const usersMap = response.reduce((acc, user) => {
+    //       // Try different possible ID fields
+    //       const userId = user.uid || user.id || user.userId;
+    //       console.log(
+    //         `  - Processing user: ${user.name || user.email}, ID: ${userId}`
+    //       );
+
+    //       if (userId) {
+    //         acc[userId] = user;
+    //       } else {
+    //         console.warn("  - User has no valid ID field:", user);
+    //       }
+    //       return acc;
+    //     }, {});
+
+    //     console.log("  - Final usersMap:", usersMap);
+    //     return usersMap;
+    //   },
+    // }),
     getAllUsers: builder.query({
       query: () => ({
         collection: "users",
       }),
+      queryFn: async () => {
+        try {
+          // ✅ Check authentication before making Firebase call
+          if (!auth.currentUser) {
+            console.log(
+              "🔒 getAllUsers: User not authenticated, returning empty object"
+            );
+            return { data: {} };
+          }
+
+          console.log("👥 Fetching all users...");
+          const usersSnapshot = await getDocs(collection(db, "users"));
+          const users = {};
+
+          usersSnapshot.forEach((doc) => {
+            const userData = doc.data();
+            const userId = userData.uid || doc.id || userData.userId;
+            if (userId) {
+              users[userId] = { id: doc.id, ...userData };
+            }
+          });
+
+          console.log(
+            "✅ All users fetched successfully:",
+            Object.keys(users).length,
+            "users"
+          );
+          return { data: users };
+        } catch (error) {
+          console.error("❌ getAllUsers error:", error);
+
+          // ✅ Handle permission-denied errors gracefully
+          if (error.code === "permission-denied") {
+            console.log(
+              "🔒 getAllUsers: Permission denied - returning empty object"
+            );
+            return { data: {} };
+          }
+
+          return { data: {} };
+        }
+      },
       providesTags: ["User"],
       transformResponse: (response) => {
         console.log("🔍 getAllUsers Debug:");
         console.log("  - Raw response:", response);
 
+        if (!response || typeof response !== "object") {
+          console.log("  - Invalid response, returning empty object");
+          return {};
+        }
+
+        // If response is already in the correct format, return it
+        if (!Array.isArray(response)) {
+          return response;
+        }
+
+        // Transform array to object (fallback)
         const usersMap = response.reduce((acc, user) => {
-          // Try different possible ID fields
           const userId = user.uid || user.id || user.userId;
           console.log(
             `  - Processing user: ${user.name || user.email}, ID: ${userId}`
@@ -179,7 +259,6 @@ export const apiSlice = createApi({
         return usersMap;
       },
     }),
-
     // MODIFIED: getRecentMatches to use 'or' operator and filter by 'completedDate' and 'status'
     getRecentMatches: builder.query({
       queryFn: async (userId) => {
@@ -1025,13 +1104,59 @@ export const apiSlice = createApi({
     // ========================================
     // Profile API ENDPOINTS
     // ========================================
+    // getUserProfile: builder.query({
+    //   queryFn: async (userId) => {
+    //     try {
+    //       if (!userId) {
+    //         return {
+    //           error: { status: "INVALID_USER", error: "No user ID provided" },
+    //         };
+    //       }
+
+    //       console.log(
+    //         "🔍 getUserProfile - fetching profile for userId:",
+    //         userId
+    //       );
+
+    //       const userDocRef = doc(db, "users", userId);
+    //       const userDoc = await getDoc(userDocRef);
+
+    //       if (!userDoc.exists()) {
+    //         return {
+    //           error: { status: "USER_NOT_FOUND", error: "User not found" },
+    //         };
+    //       }
+
+    //       const userData = { id: userDoc.id, ...userDoc.data() };
+    //       const serializedData = convertTimestamps(userData);
+
+    //       console.log("✅ getUserProfile - profile data:", serializedData);
+    //       return { data: serializedData };
+    //     } catch (error) {
+    //       console.error("❌ getUserProfile error:", error);
+    //       return { error: { status: "FIREBASE_ERROR", error: error.message } };
+    //     }
+    //   },
+    //   providesTags: (result, error, userId) => [
+    //     { type: "UserProfile", id: userId },
+    //   ],
+    // }),
     getUserProfile: builder.query({
       queryFn: async (userId) => {
         try {
+          // ✅ CRITICAL FIX: Check authentication before making Firebase call
+          if (!auth.currentUser) {
+            console.log(
+              "🔒 getUserProfile: User not authenticated, returning null"
+            );
+            return { data: null };
+          }
+
           if (!userId) {
-            return {
-              error: { status: "INVALID_USER", error: "No user ID provided" },
-            };
+            console.log(
+              "🔒 getUserProfile: No userId provided, returning null"
+            );
+            return { data: null };
           }
 
           console.log(
@@ -1043,6 +1168,10 @@ export const apiSlice = createApi({
           const userDoc = await getDoc(userDocRef);
 
           if (!userDoc.exists()) {
+            console.log(
+              "❌ getUserProfile: User document not found for:",
+              userId
+            );
             return {
               error: { status: "USER_NOT_FOUND", error: "User not found" },
             };
@@ -1055,6 +1184,23 @@ export const apiSlice = createApi({
           return { data: serializedData };
         } catch (error) {
           console.error("❌ getUserProfile error:", error);
+
+          // ✅ CRITICAL FIX: Handle permission-denied errors gracefully
+          if (error.code === "permission-denied") {
+            console.log(
+              "🔒 getUserProfile: Permission denied - likely during auth transition, returning null"
+            );
+            return { data: null };
+          }
+
+          // ✅ CRITICAL FIX: Handle other Firebase errors gracefully
+          if (error.code === "unavailable") {
+            console.log(
+              "🌐 getUserProfile: Firebase unavailable, returning null"
+            );
+            return { data: null };
+          }
+
           return { error: { status: "FIREBASE_ERROR", error: error.message } };
         }
       },

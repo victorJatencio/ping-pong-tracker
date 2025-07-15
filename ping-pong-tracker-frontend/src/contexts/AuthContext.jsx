@@ -1,4 +1,3 @@
-// src/contexts/AuthContext.jsx
 import React, { createContext, useState, useEffect, useRef } from "react";
 import {
   createUserWithEmailAndPassword,
@@ -12,6 +11,7 @@ import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { useDispatch } from "react-redux";
 import { apiSlice } from "../store/slices/apiSlice";
+import { firebaseListenerManager } from "../utils/firebaseListenerManager";
 
 // Create the context
 export const AuthContext = createContext();
@@ -20,6 +20,7 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const dispatch = useDispatch();
 
   // Add this ref to track mounted state
@@ -100,23 +101,40 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Login existing user
+  // ✅ ENHANCED LOGOUT WITH COMPREHENSIVE CLEANUP
   const logout = async () => {
     try {
-      // Clear all RTK Query cache and subscriptions BEFORE logout
+      console.log("[" + new Date().toISOString() + "] Starting comprehensive logout process...");
+      
+      // Set logout state to prevent new listeners
+      setIsLoggingOut(true);
+      
+      // ✅ STEP 1: Clean up ALL Firebase listeners across the entire app
+      console.log("[" + new Date().toISOString() + "] Cleaning up Firebase listeners...");
+      await firebaseListenerManager.cleanupAll();
+      
+      // ✅ STEP 2: Clear all RTK Query cache and subscriptions
+      console.log("[" + new Date().toISOString() + "] Clearing RTK Query cache...");
       dispatch(apiSlice.util.resetApiState());
-
-      // Then sign out
+      
+      // ✅ STEP 3: Add delay to ensure all cleanup is complete
+      console.log("[" + new Date().toISOString() + "] Waiting for cleanup to complete...");
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // ✅ STEP 4: Set loading state to prevent new queries
+      if (isMounted.current) setLoading(true);
+      
+      // ✅ STEP 5: Finally sign out
+      console.log("[" + new Date().toISOString() + "] Signing out from Firebase Auth...");
       await signOut(auth);
 
-      console.log(
-        "[" + new Date().toISOString() + "] User signed out successfully"
-      );
+      console.log("[" + new Date().toISOString() + "] User signed out successfully");
     } catch (error) {
-      console.error(
-        "[" + new Date().toISOString() + "] Error signing out:",
-        error
-      );
+      console.error("[" + new Date().toISOString() + "] Error signing out:", error);
+    } finally {
+      // Reset logout state
+      setIsLoggingOut(false);
+      if (isMounted.current) setLoading(false);
     }
   };
 
@@ -172,7 +190,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Listen for auth state changes
+  // ✅ ENHANCED AUTH STATE LISTENER WITH BETTER ERROR HANDLING
   useEffect(() => {
     console.log("AuthContext: Setting up auth state listener...");
 
@@ -185,13 +203,24 @@ export const AuthProvider = ({ children }) => {
       if (!isMounted.current) {
         console.log("AuthContext: Component unmounted, skipping state update");
         return;
-      } // Skip if component unmounted
+      }
+
+      // Skip Firestore calls during logout process
+      if (isLoggingOut) {
+        console.log("AuthContext: Logout in progress, skipping Firestore calls");
+        if (isMounted.current) {
+          setCurrentUser(user);
+          setLoading(false);
+        }
+        return;
+      }
 
       if (user) {
         console.log(
           "AuthContext: User is authenticated, fetching additional data..."
         );
-        // Get additional user data from Firestore if needed
+        
+        // ✅ ENHANCED ERROR HANDLING for Firestore access
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists() && isMounted.current) {
@@ -210,12 +239,26 @@ export const AuthProvider = ({ children }) => {
           }
         } catch (error) {
           console.error("AuthContext: Error fetching user data:", error);
-          console.error("Error fetching user data:", error);
+          
+          // ✅ HANDLE ALL FIREBASE ERRORS GRACEFULLY
+          if (error.code === 'permission-denied') {
+            console.log('🔒 AuthContext: Permission denied fetching user data - using auth data only');
+          } else if (error.code === 'unavailable') {
+            console.log('🌐 AuthContext: Firebase unavailable - using auth data only');
+          } else if (error.code === 'unauthenticated') {
+            console.log('🔒 AuthContext: Unauthenticated error - using auth data only');
+          }
+          
+          // Fall back to auth data only
           if (isMounted.current) setCurrentUser(user);
         }
       } else {
         console.log("AuthContext: User is not authenticated");
-        if (isMounted.current) setCurrentUser(null);
+        if (isMounted.current) {
+          setCurrentUser(null);
+          // Clear any remaining RTK Query cache when user becomes null
+          dispatch(apiSlice.util.resetApiState());
+        }
       }
 
       if (isMounted.current) {
@@ -229,7 +272,7 @@ export const AuthProvider = ({ children }) => {
       console.log("AuthContext: Cleaning up auth state listener");
       unsubscribe();
     };
-  }, []);
+  }, [dispatch, isLoggingOut]);
 
   // Log current user state changes
   useEffect(() => {
@@ -238,18 +281,27 @@ export const AuthProvider = ({ children }) => {
       currentUser ? currentUser.uid : "null"
     );
     console.log("AuthContext: Loading state:", loading);
+    console.log("AuthContext: Active Firebase listeners:", firebaseListenerManager.getActiveCount());
   }, [currentUser, loading]);
+
+  // Helper function to check if user is authenticated
+  const isAuthenticated = () => {
+    return auth.currentUser !== null && currentUser !== null && !isLoggingOut;
+  };
 
   // Context value
   const value = {
     currentUser,
     loading,
     error,
+    isLoggingOut,
     register,
     login,
     logout,
     resetPassword,
     updateUserProfile,
+    isAuthenticated,
+    firebaseListenerManager, // Expose for components to use
   };
 
   return (
