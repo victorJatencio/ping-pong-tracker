@@ -58,7 +58,6 @@ const MatchHistoryCard = ({ title = "Match History" }) => {
       setError(null);
 
       try {
-        console.log('🔍 Fetching real matches for user:', currentUser.uid);
 
         // Create query to get matches where user is either player1 or player2
         const matchesRef = collection(db, 'matches');
@@ -86,9 +85,6 @@ const MatchHistoryCard = ({ title = "Match History" }) => {
           });
         });
 
-        console.log('🔍 Real matches fetched:', matchesData.length);
-        console.log('🔍 Sample match:', matchesData[0]);
-
         setMatches(matchesData);
       } catch (err) {
         console.error('Error fetching matches:', err);
@@ -106,8 +102,6 @@ const MatchHistoryCard = ({ title = "Match History" }) => {
     if (!matches || !allUsers || !currentUser) {
       return { tableData: [], pagination: null };
     }
-
-    console.log('🔍 Processing real matches:', matches.length);
 
     // Process matches into table format
     const processedMatches = matches.map((match) => {
@@ -139,9 +133,6 @@ const MatchHistoryCard = ({ title = "Match History" }) => {
         originalMatch: match
       };
     });
-
-    console.log('🔍 Processed matches:', processedMatches.length);
-    console.log('🔍 Sample processed match:', processedMatches[0]);
 
     // Apply filters
     let filteredMatches = processedMatches;
@@ -337,23 +328,6 @@ const MatchHistoryCard = ({ title = "Match History" }) => {
 
   return (
     <DashboardCard title={title}>
-      {/* Real Data Banner */}
-      <div className="alert alert-success mb-3">
-        <div className="d-flex align-items-center">
-          <span className="me-2">✅</span>
-          <div>
-            <strong>Real Match Data:</strong> Showing {matches.length} actual matches from your Firebase matches collection.
-            {tableData.length > 0 && (
-              <div className="mt-1">
-                <small>
-                  Displaying {tableData.length} matches on this page. 
-                  Sample match ID: {tableData[0]?.id}
-                </small>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Filters */}
       <MatchHistoryFilters

@@ -1,0 +1,27 @@
+.hallOfFame__item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.item__row {
+    display: flex;
+    align-items: center;
+    flex: 1;
+}
+
+.item__col {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    font-size: 12px;
+    flex: 1;
+}
+
+.item__badge {
+    max-height: 1.5rem;
+    flex: 1;
+    display: flex;
+    justify-content: end;
+}

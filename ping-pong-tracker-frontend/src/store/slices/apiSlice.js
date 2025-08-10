@@ -259,6 +259,60 @@ export const apiSlice = createApi({
         return usersMap;
       },
     }),
+    // getAllUsers: builder.query({
+    //   queryFn: async () => {
+    //     try {
+    //       console.log("🔍 getAllUsers called");
+
+    //       // ✅ CHECK AUTHENTICATION BEFORE MAKING FIREBASE CALL
+    //       if (!auth.currentUser) {
+    //         console.log(
+    //           "🔒 getAllUsers: User not authenticated, returning empty array"
+    //         );
+    //         return { data: [] };
+    //       }
+
+    //       console.log("🔍 getAllUsers: Fetching all users from Firestore...");
+    //       const usersCollection = collection(db, "users");
+    //       const usersSnapshot = await getDocs(usersCollection);
+
+    //       const users = usersSnapshot.docs.map((doc) => {
+    //         const userData = { id: doc.id, ...doc.data() };
+    //         return convertTimestamps(userData);
+    //       });
+
+    //       console.log(
+    //         "✅ getAllUsers: Successfully fetched",
+    //         users.length,
+    //         "users"
+    //       );
+    //       return { data: users };
+    //     } catch (error) {
+    //       console.error("❌ getAllUsers error:", error);
+
+    //       // ✅ HANDLE PERMISSION-DENIED ERRORS GRACEFULLY
+    //       if (error.code === "permission-denied") {
+    //         console.log(
+    //           "🔒 getAllUsers: Permission denied - returning empty array"
+    //         );
+    //         return { data: [] };
+    //       } else if (error.code === "unauthenticated") {
+    //         console.log(
+    //           "🔒 getAllUsers: Unauthenticated - returning empty array"
+    //         );
+    //         return { data: [] };
+    //       } else if (error.code === "unavailable") {
+    //         console.log(
+    //           "🌐 getAllUsers: Firebase unavailable - returning empty array"
+    //         );
+    //         return { data: [] };
+    //       }
+
+    //       return { error: { status: "FIREBASE_ERROR", error: error.message } };
+    //     }
+    //   },
+    //   providesTags: ["Users"],
+    // }),
     // MODIFIED: getRecentMatches to use 'or' operator and filter by 'completedDate' and 'status'
     getRecentMatches: builder.query({
       queryFn: async (userId) => {
@@ -1141,10 +1195,79 @@ export const apiSlice = createApi({
     //     { type: "UserProfile", id: userId },
     //   ],
     // }),
+    // getUserProfile: builder.query({
+    //   queryFn: async (userId) => {
+    //     try {
+    //       // ✅ CRITICAL FIX: Check authentication before making Firebase call
+    //       if (!auth.currentUser) {
+    //         console.log(
+    //           "🔒 getUserProfile: User not authenticated, returning null"
+    //         );
+    //         return { data: null };
+    //       }
+
+    //       if (!userId) {
+    //         console.log(
+    //           "🔒 getUserProfile: No userId provided, returning null"
+    //         );
+    //         return { data: null };
+    //       }
+
+    //       console.log(
+    //         "🔍 getUserProfile - fetching profile for userId:",
+    //         userId
+    //       );
+
+    //       const userDocRef = doc(db, "users", userId);
+    //       const userDoc = await getDoc(userDocRef);
+
+    //       if (!userDoc.exists()) {
+    //         console.log(
+    //           "❌ getUserProfile: User document not found for:",
+    //           userId
+    //         );
+    //         return {
+    //           error: { status: "USER_NOT_FOUND", error: "User not found" },
+    //         };
+    //       }
+
+    //       const userData = { id: userDoc.id, ...userDoc.data() };
+    //       const serializedData = convertTimestamps(userData);
+
+    //       console.log("✅ getUserProfile - profile data:", serializedData);
+    //       return { data: serializedData };
+    //     } catch (error) {
+    //       console.error("❌ getUserProfile error:", error);
+
+    //       // ✅ CRITICAL FIX: Handle permission-denied errors gracefully
+    //       if (error.code === "permission-denied") {
+    //         console.log(
+    //           "🔒 getUserProfile: Permission denied - likely during auth transition, returning null"
+    //         );
+    //         return { data: null };
+    //       }
+
+    //       // ✅ CRITICAL FIX: Handle other Firebase errors gracefully
+    //       if (error.code === "unavailable") {
+    //         console.log(
+    //           "🌐 getUserProfile: Firebase unavailable, returning null"
+    //         );
+    //         return { data: null };
+    //       }
+
+    //       return { error: { status: "FIREBASE_ERROR", error: error.message } };
+    //     }
+    //   },
+    //   providesTags: (result, error, userId) => [
+    //     { type: "UserProfile", id: userId },
+    //   ],
+    // }),
     getUserProfile: builder.query({
       queryFn: async (userId) => {
         try {
-          // ✅ CRITICAL FIX: Check authentication before making Firebase call
+          console.log("🔍 getUserProfile called for userId:", userId);
+
+          // ✅ CHECK AUTHENTICATION BEFORE MAKING FIREBASE CALL
           if (!auth.currentUser) {
             console.log(
               "🔒 getUserProfile: User not authenticated, returning null"
@@ -1160,18 +1283,13 @@ export const apiSlice = createApi({
           }
 
           console.log(
-            "🔍 getUserProfile - fetching profile for userId:",
-            userId
+            "🔍 getUserProfile: Fetching user document from Firestore..."
           );
-
           const userDocRef = doc(db, "users", userId);
           const userDoc = await getDoc(userDocRef);
 
           if (!userDoc.exists()) {
-            console.log(
-              "❌ getUserProfile: User document not found for:",
-              userId
-            );
+            console.log("🔍 getUserProfile: User document not found");
             return {
               error: { status: "USER_NOT_FOUND", error: "User not found" },
             };
@@ -1180,23 +1298,23 @@ export const apiSlice = createApi({
           const userData = { id: userDoc.id, ...userDoc.data() };
           const serializedData = convertTimestamps(userData);
 
-          console.log("✅ getUserProfile - profile data:", serializedData);
+          console.log("✅ getUserProfile: Successfully fetched user data");
           return { data: serializedData };
         } catch (error) {
           console.error("❌ getUserProfile error:", error);
 
-          // ✅ CRITICAL FIX: Handle permission-denied errors gracefully
+          // ✅ HANDLE PERMISSION-DENIED ERRORS GRACEFULLY
           if (error.code === "permission-denied") {
             console.log(
-              "🔒 getUserProfile: Permission denied - likely during auth transition, returning null"
+              "🔒 getUserProfile: Permission denied - returning null (user likely logging out)"
             );
             return { data: null };
-          }
-
-          // ✅ CRITICAL FIX: Handle other Firebase errors gracefully
-          if (error.code === "unavailable") {
+          } else if (error.code === "unauthenticated") {
+            console.log("🔒 getUserProfile: Unauthenticated - returning null");
+            return { data: null };
+          } else if (error.code === "unavailable") {
             console.log(
-              "🌐 getUserProfile: Firebase unavailable, returning null"
+              "🌐 getUserProfile: Firebase unavailable - returning null"
             );
             return { data: null };
           }

@@ -1,14 +1,10 @@
 import React, { useContext } from "react";
 import { AuthContext } from "../../contexts/AuthContext";
+import { Link } from "react-router-dom";
 import DashboardCard from "../common/Card";
-import "./AchievementsCard.scss";
 import { useGetPlayerStatsFromBackendQuery } from "../../store/slices/apiSlice";
 
-/**
- * Achievements Card Component
- * Displays user achievements: Total Wins, Win Streak, and Games Played
- * Uses backend API for accurate, synced data
- */
+
 const AchievementsCard = () => {
   // Get current user from AuthContext
   const { currentUser } = useContext(AuthContext);
@@ -24,6 +20,14 @@ const AchievementsCard = () => {
     skip: !userId,
     refetchOnMountOrArgChange: true,
   });
+
+  // Footer action button
+  const footerAction = (
+    <Link to="/history" className="text-decoration-none">
+      View All <i className="bi bi-arrow-right"></i>
+    </Link>
+  );
+
 
   // Handle loading state
   if (isLoading) {
@@ -75,6 +79,7 @@ const AchievementsCard = () => {
     );
   }
 
+
   // Extract only the essential data
   const totalWins = playerStats?.totalWins || 0;
   const currentStreak = playerStats?.winStreak || 0;
@@ -84,38 +89,42 @@ const AchievementsCard = () => {
     <DashboardCard
       title="Achievements"
       className="achievements-card"
+      footerAction={footerAction}
     >
-      <div className="achievements-grid">
+      <div className="card-body achievements-grid">
         {/* Total Wins */}
         <div className="achievement-item">
           <div className="achievement-icon trophy">
-            <i className="bi bi-trophy-fill"></i>
+            {/* <i className="bi bi-trophy-fill"></i> */}
+            <img className="bi bi-trophy-fill" src="images/trophy.jpg" alt="wins" />
           </div>
           <div className="achievement-content">
             <div className="achievement-number">{totalWins}</div>
-            <div className="achievement-label">Total Wins</div>
+            <div className="achievement-label">Wins</div>
           </div>
         </div>
 
         {/* Current Streak */}
         <div className="achievement-item">
           <div className="achievement-icon streak">
-            <i className="bi bi-fire"></i>
+            {/* <i className="bi bi-fire"></i> */}
+            <img className="bi bi-trophy-fill" src="images/ball.jpg" alt="streak" />
           </div>
           <div className="achievement-content">
             <div className="achievement-number">{currentStreak}</div>
-            <div className="achievement-label">Win Streak</div>
+            <div className="achievement-label">Streak</div>
           </div>
         </div>
 
         {/* Total Games */}
         <div className="achievement-item">
           <div className="achievement-icon games">
-            <i className="bi bi-controller"></i>
+            {/* <i className="bi bi-controller"></i> */}
+            <img className="bi bi-trophy-fill" src="images/racket.jpg" alt="games" />
           </div>
           <div className="achievement-content">
             <div className="achievement-number">{totalGames}</div>
-            <div className="achievement-label">Games Played</div>
+            <div className="achievement-label">Games</div>
           </div>
         </div>
       </div>

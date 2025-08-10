@@ -124,7 +124,7 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
                 displayName: userProfile?.displayName,
               }}
               size="xl"
-              className="mb-2"
+              className="mb-2 profile__image"
             />
             
             {/* Avatar Edit Button */}

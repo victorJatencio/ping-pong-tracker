@@ -180,7 +180,7 @@ const RecentMatchesCard = () => {
   // Footer action button
   const footerAction = (
     <Link to="/history" className="text-decoration-none">
-      View All Matches <i className="bi bi-arrow-right"></i>
+      View All <i className="bi bi-arrow-right"></i>
     </Link>
   );
 
@@ -209,32 +209,31 @@ const RecentMatchesCard = () => {
             });
 
             return (
-              <div key={match.id} className="list-group-item border-0 px-0 py-2">
-                <div className="d-flex justify-content-between align-items-center">
-                  <div className="d-flex align-items-center">
-                    {/* ✅ FIXED: Use photoURL field instead of profileImageUrl */}
+              <div key={match.id} className="card-body py-2">
+                <div className="player__list_item">
+                  <div className="player__list_info">
                     <UserAvatar
                       user={{
                         photoURL: match.opponentAvatar,
                         displayName: match.opponent,
                       }}
                       size={32}
-                      className="me-2"
+                      className="player__list_avatar"
                     />
-                    <div>
-                      <h6 className="mb-0">vs. {match.opponent}</h6>
-                      <small className="text-muted">{match.date}</small>
+                    <div className="player__list_text">
+                      <h6><span className="player__list_vs">vs.</span> {match.opponent}</h6>
+                      {/* <small>{match.date}</small> */}
                     </div>
                   </div>
-                  <div className="text-end">
+                  <div className="player__list_score">
                     <Badge
                       bg={match.result === "Won" ? "success" : "danger"}
-                      className="mb-1"
+                      
                     >
                       {match.result}
                     </Badge>
-                    <div>
-                      <small className="fw-bold">{match.score}</small>
+                    <div className="player__list_number">
+                      <small>{match.score}</small>
                     </div>
                   </div>
                 </div>

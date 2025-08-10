@@ -19,7 +19,7 @@
     
     &.active {
       color: $white;
-      font-weight: 600;
+      font-weight: 400;
       border-bottom: 2px solid $white;
       padding-bottom: calc(0.5rem - 2px);
     }
@@ -32,4 +32,8 @@
 
 [data-bs-theme="dark"] .navbar {
   background-color: $brand-blue !important;
+}
+
+[data-bs-theme="dark"] .tab-navigation .nav-link.active {
+  background: #303058;
 }

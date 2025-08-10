@@ -1,0 +1,14 @@
+.players__number {
+    font-size: 5rem;
+    font-weight: 700;
+}
+
+p.players__text {
+    text-transform: uppercase;
+    color: $gray-600;
+    font-weight: 500;
+}
+
+[data-bs-theme="dark"] p.players__text {
+    color: $gray-400;
+}

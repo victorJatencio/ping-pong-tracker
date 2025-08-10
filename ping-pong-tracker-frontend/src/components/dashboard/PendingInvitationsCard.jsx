@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { AuthContext } from "../../contexts/AuthContext";
+import { Link } from "react-router-dom";
 import { useGetAllUsersQuery } from "../../store/slices/apiSlice";
 import DashboardCard from "../common/Card";
 import UserAvatar from "../../components/common/UserAvatar";
 import Modal from "../common/Modal";
-import "./PendingInvitationsCard.scss";
 
 // Firebase imports for real-time sync
 import {
@@ -428,19 +428,18 @@ const PendingInvitationsCard = () => {
     );
   }
 
+   // Footer action button
+  const footerAction = (
+    <Link to="/history" className="text-decoration-none">
+      View All <i className="bi bi-arrow-right"></i>
+    </Link>
+  );
+
   return (
     <>
       <DashboardCard
         title="Pending Invitations"
-        footerAction={
-          <button
-            className="view-all-button"
-            onClick={() => console.log("View all invitations")}
-            disabled={enrichedInvitations.length === 0}
-          >
-            View All
-          </button>
-        }
+        footerAction={footerAction}
       >
         {error && (
           <div className="alert alert-error">

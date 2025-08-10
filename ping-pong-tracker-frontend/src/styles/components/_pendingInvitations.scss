@@ -100,13 +100,13 @@
 .no-invitations-title {
   font-size: 16px;
   font-weight: 600;
-  color: black;
+  color: $gray-800;
   margin-bottom: 8px;
 }
 
 .no-invitations-message {
   font-size: 14px;
-  color: black;
+  color: $gray-700;
 }
 
 .pending-invitations-loading {
@@ -303,4 +303,12 @@
       text-decoration: underline;
     }
   }
+}
+
+[data-bs-theme="dark"] .no-invitations-title {
+  color: $gray-400;
+}
+
+[data-bs-theme="dark"] .no-invitations-message {
+  color: $gray-500;
 }

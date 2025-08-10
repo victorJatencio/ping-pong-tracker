@@ -202,7 +202,7 @@ const UpdateScoreModal = ({ show, handleClose, match, onScoreUpdated }) => {
                         </Alert>
 
                         {/* Match Info Display */}
-                        <div className="bg-light p-3 rounded mb-3">
+                        <div className="p-3 rounded mb-3">
                             <h6 className="mb-2">Match Details</h6>
                             <p className="mb-1"><strong>Date:</strong> {match.date} at {match.time}</p>
                             <p className="mb-1"><strong>Location:</strong> {match.location}</p>
@@ -295,7 +295,7 @@ const UpdateScoreModal = ({ show, handleClose, match, onScoreUpdated }) => {
                             </ul>
                         </div>
 
-                        <div className="bg-light p-3 rounded mb-4">
+                        <div className="p-3 rounded mb-4">
                             <h6>New Scores:</h6>
                             <div className="fs-4 fw-bold">
                                 {getPlayerName(match.player1Id)}: {formData.player1Score} - {getPlayerName(match.player2Id)}: {formData.player2Score}

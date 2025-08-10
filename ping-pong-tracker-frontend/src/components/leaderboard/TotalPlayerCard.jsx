@@ -34,8 +34,8 @@ const TotalPlayersCard = ({ title = "Total Players" }) => {
   return (
     <DashboardCard title={title}>
       <div className="text-center py-3">
-        <h1 className="display-4 fw-bold text-primary mb-2">{totalPlayers}</h1>
-        <p className="text-muted mb-0">Registered Players</p>
+        <h1 className="text-primary mb-2 players__number">{totalPlayers}</h1>
+        <p className="players__text">Registered Players</p>
       </div>
     </DashboardCard>
   );

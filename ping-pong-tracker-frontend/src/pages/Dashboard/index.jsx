@@ -15,23 +15,18 @@ import Jumbotron from "../../components/common/Jumbotron";
 import UserAvatar from "../../components/common/UserAvatar";
 import { Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
-import OngoingMatches from "../../components/dashboard/OngoingMatchesCard";
 import { useGetPlayerStatsFromBackendQuery } from "../../store/slices/apiSlice";
 import { db } from "../../config/firebase";
 import { collection, getDocs } from "firebase/firestore";
 
-// Import the new Recent Matches Card component
+
 import RecentMatchesCard from "../../components/dashboard/RecentMatchesCard";
-// Import Pending Invitations Card
 import PendingInvitationsCard from '../../components/dashboard/PendingInvitationsCard';
-// Import Achievements Card
 import AchievementsCard from "../../components/dashboard/AchievementsCard";
-// Import Leaderboard Preview Card
 import LeaderboardPreview from '../../components/dashboard/LeaderboardPreview';
-// Import Win/Loss Ratio Card
 import WinLossRatio from "../../components/dashboard/WinLossRatio";
-// Import Table Card
 import RecentActivityCard from '../../components/dashboard/RecentActivityCard';
+import OngoingMatchesCard from "../../components/dashboard/OngoingMatchesCard";
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -217,7 +212,7 @@ const Dashboard = () => {
       <Jumbotron
         title={`Welcome back, ${firstName}!`}
         subtitle="Track your ping-pong progress and compete with friends"
-        backgroundImage="https://images.unsplash.com/photo-1551698618-1dfe5d97d256?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+        backgroundImage="images/Dashboard-Banner_web.jpg"
         height="300px"
         overlay={true}
         textAlign="left"
@@ -226,48 +221,39 @@ const Dashboard = () => {
 
       {/* Dashboard Content with Overlap Effect */}
       <div className="jumbotron-overlap-container">
-        <Container className="py-5">
-          <Row className="g-4">
-            {/* First Row - Main Stats Cards */}
-            <Row className="g-4 mb-4">
-              {/* Win/Loss Ratio Card */}
+        <Container className="py-5 mobile__position_grid">
+          <Row className="g-4 mb-4">
               <Col lg={4}>
                 <WinLossRatio />
               </Col>
-
-              {/* NEW: Recent Matches Card - Using Redux Component */}
+            
               <Col lg={4}>
                 <RecentMatchesCard />
               </Col>
 
-              {/* Achievements Card */}
               <Col lg={4}>
                 <AchievementsCard playerStats={userStats} isLoading={isLoading} />
               </Col>
-            </Row>
-
-            {/* Second Row - Additional Cards */}
-            <Row className="g-4">
-              {/* Ongoing Matches */}
+          </Row>
+          <Row className="g-4 mb-4">
               <Col lg={4}>
-                <OngoingMatches />
+                <OngoingMatchesCard />
               </Col>
 
               <Col lg={4}>
                 <PendingInvitationsCard />
               </Col>
 
-              {/* Placeholder for other cards */}
               <Col lg={4}>
                 <LeaderboardPreview />
               </Col>
-            </Row>
-            <Row className="g-4">
+          </Row>
+          <Row className="g-4">
               <Col lg={12}>
                  <RecentActivityCard />
               </Col>
-            </Row>
           </Row>
+          
         </Container>
       </div>
     </div>

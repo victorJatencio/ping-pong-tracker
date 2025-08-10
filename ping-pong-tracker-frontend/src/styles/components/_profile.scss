@@ -194,6 +194,11 @@
   }
 }
 
+.profile__image {
+  width: 80px !important;
+  height: 80px !important;
+}
+
 // Dark mode adjustments
 [data-bs-theme="dark"] {
   .profile-page {

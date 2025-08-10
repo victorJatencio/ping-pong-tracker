@@ -1,0 +1,160 @@
+.gradient-btn {
+  /* Base button styles */
+  border: none;
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  
+  /* Gradient background - pink to orange */
+  background: linear-gradient(135deg, #ff6b9d 0%, #ff8a56 100%);
+  
+  /* Rounded corners (not fully round) */
+  border-radius: 6px;
+  
+  /* Text color */
+  color: white;
+  
+  /* Remove default button styles */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  
+  /* Prevent text selection */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+}
+
+/* Button content wrapper */
+.gradient-btn-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+}
+
+/* Size variants */
+.gradient-btn-small {
+  padding: 8px 16px;
+  font-size: 12px;
+  border-radius: 8px;
+  min-height: 32px;
+}
+
+.gradient-btn-medium {
+  padding: 12px 24px;
+  font-size: 14px;
+  border-radius: 12px;
+  min-height: 44px;
+}
+
+.gradient-btn-large {
+  padding: 16px 32px;
+  font-size: 16px;
+  border-radius: 16px;
+  min-height: 52px;
+}
+
+/* Hover effects */
+.gradient-btn:hover:not(.gradient-btn-disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 107, 157, 0.4);
+  
+  /* Slightly brighter gradient on hover */
+  background: linear-gradient(135deg, #ff7ba7 0%, #ff9466 100%);
+}
+
+/* Active/pressed state */
+.gradient-btn:active:not(.gradient-btn-disabled) {
+  transform: translateY(0);
+  box-shadow: 0 4px 15px rgba(255, 107, 157, 0.3);
+}
+
+/* Focus state for accessibility */
+.gradient-btn:focus:not(.gradient-btn-disabled) {
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.3);
+}
+
+/* Disabled state */
+.gradient-btn-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: linear-gradient(135deg, #cccccc 0%, #999999 100%);
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Variant styles */
+.gradient-btn-primary {
+  /* Default pink-to-orange gradient (already defined above) */
+}
+
+.gradient-btn-secondary {
+  /* Alternative gradient for secondary buttons */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-btn-secondary:hover:not(.gradient-btn-disabled) {
+  background: linear-gradient(135deg, #7689f0 0%, #8659b8 100%);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+/* Loading state (optional) */
+.gradient-btn-loading {
+  pointer-events: none;
+}
+
+.gradient-btn-loading .gradient-btn-content {
+  opacity: 0.7;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .gradient-btn-large {
+    padding: 14px 28px;
+    font-size: 15px;
+    min-height: 48px;
+  }
+  
+  .gradient-btn-medium {
+    padding: 10px 20px;
+    font-size: 13px;
+    min-height: 40px;
+  }
+}
+
+/* Animation for button press effect */
+@keyframes buttonPress {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+
+.gradient-btn:active:not(.gradient-btn-disabled) {
+  animation: buttonPress 0.1s ease;
+}
+
+/* Smooth gradient animation on hover */
+.gradient-btn {
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gradient-btn:hover:not(.gradient-btn-disabled) {
+  animation-duration: 1s;
+}

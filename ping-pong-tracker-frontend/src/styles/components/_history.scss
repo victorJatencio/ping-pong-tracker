@@ -135,7 +135,7 @@
     }
     
     .card-header {
-      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      background: transparent;
       border-bottom: 1px solid #e9ecef;
       padding: 1rem 1.5rem;
       
@@ -411,7 +411,7 @@
       background-color: #343a40;
       
       .card-header {
-        background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+        background: transparent;
         border-bottom-color: #495057;
         
         h5, h6 {

@@ -1,0 +1,29 @@
+.standard__card_title {
+    font-size: 16px;
+    font-weight: 600;
+    color: $gray-800;
+    margin-bottom: 8px;
+}
+
+.standard__card_message {
+    font-size: 14px;
+    color: $gray-700;
+}
+
+.match__item {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-bs-theme="dark"] .match__item_content {
+  background-color: $dark-nav-tabs !important;
+}
+
+
+[data-bs-theme="dark"] .standard__card_title {
+  color: $gray-400;
+}
+
+[data-bs-theme="dark"] .standard__card_message {
+  color: $gray-500;
+}

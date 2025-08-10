@@ -1,0 +1,39 @@
+.player__list_item {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.player__list_info {
+    display: flex;
+    align-items: center;
+}
+
+.player__list_text {
+    display: flex;
+    flex-direction: column;
+
+    .player__list_vs {
+        position: relative;
+        display: block;
+        color: $gray-600;
+    }
+}
+
+.player__list_avatar {
+    margin-right: 0.5rem;
+    height: 40px !important;
+    width: 40px !important;
+}
+
+.player__list_score {
+    display: flex;
+    flex-direction: row-reverse;
+}
+
+.player__list_number {
+    font-weight: 600;
+    margin-right: 0.5rem;
+}

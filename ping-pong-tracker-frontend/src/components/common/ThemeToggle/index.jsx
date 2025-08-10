@@ -9,7 +9,7 @@ const ThemeToggle = () => {
         <Button
             variant="link"
             size="sm"
-            className="theme-toggle-btn rounded-circle p-2"
+            className="theme-toggle-btn rounded-circle"
             onClick={toggleTheme}
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
         >

@@ -70,9 +70,9 @@ const AllMatchesCard = () => {
       setError(null);
 
       try {
-        console.log('🔍 Fetching all matches from Firebase...');
-        console.log('🔍 Show all matches:', showAllMatches);
-        console.log('🔍 Current user ID:', currentUserId);
+        // console.log('🔍 Fetching all matches from Firebase...');
+        // console.log('🔍 Show all matches:', showAllMatches);
+        // console.log('🔍 Current user ID:', currentUserId);
 
         const matchesRef = collection(db, 'matches');
         let q;
@@ -108,8 +108,8 @@ const AllMatchesCard = () => {
           });
         });
 
-        console.log('🔍 Real matches fetched:', matchesData.length);
-        console.log('🔍 Sample match:', matchesData[0]);
+        // console.log('🔍 Real matches fetched:', matchesData.length);
+        // console.log('🔍 Sample match:', matchesData[0]);
 
         setMatches(matchesData);
       } catch (err) {
@@ -143,13 +143,13 @@ const AllMatchesCard = () => {
       filtered = filtered.filter(match => 
         match.player1Id === selectedPlayerId || match.player2Id === selectedPlayerId
       );
-      console.log('🔍 After player filter:', filtered.length);
+      // console.log('🔍 After player filter:', filtered.length);
     }
 
     // Filter by status
     if (selectedStatus && selectedStatus !== 'all') {
       filtered = filtered.filter(match => match.status === selectedStatus);
-      console.log('🔍 After status filter:', filtered.length);
+      // console.log('🔍 After status filter:', filtered.length);
     }
 
     // Filter by result (only for user's matches)
@@ -161,7 +161,7 @@ const AllMatchesCard = () => {
           match.status === 'completed' && match.winnerId !== currentUserId
         );
       }
-      console.log('🔍 After result filter:', filtered.length);
+      // console.log('🔍 After result filter:', filtered.length);
     }
 
     // Filter by date range
@@ -173,7 +173,7 @@ const AllMatchesCard = () => {
           new Date(match.completedDate || match.scheduledDate);
         return matchDate >= start;
       });
-      console.log('🔍 After start date filter:', filtered.length);
+      // console.log('🔍 After start date filter:', filtered.length);
     }
 
     if (endDate) {
@@ -185,10 +185,10 @@ const AllMatchesCard = () => {
           new Date(match.completedDate || match.scheduledDate);
         return matchDate <= end;
       });
-      console.log('🔍 After end date filter:', filtered.length);
+      // console.log('🔍 After end date filter:', filtered.length);
     }
 
-    console.log('🔍 Final filtered matches:', filtered.length);
+    // console.log('🔍 Final filtered matches:', filtered.length);
     return filtered;
   }, [matches, selectedPlayerId, selectedStatus, selectedResult, startDate, endDate, showAllMatches, currentUserId]);
 
@@ -198,7 +198,7 @@ const AllMatchesCard = () => {
       return [];
     }
 
-    console.log("🔍 Processing matches for table:", filteredMatches.length);
+    // console.log("🔍 Processing matches for table:", filteredMatches.length);
 
     return filteredMatches.map((match) => {
       // Determine player1 and player2 objects
@@ -368,17 +368,6 @@ const AllMatchesCard = () => {
 
   return (
     <DashboardCard title={showAllMatches ? "All Matches" : "My Matches"}>
-      {/* Real Data Banner */}
-      <div className="alert alert-success mb-3">
-        <div className="d-flex align-items-center">
-          <span className="me-2">✅</span>
-          <div>
-            <strong>Real Match Data:</strong> Showing {matches.length} actual matches from Firebase. 
-            After filtering: {tableData.length} matches.
-            {showAllMatches ? ' (All matches in system)' : ' (Your matches only)'}
-          </div>
-        </div>
-      </div>
 
       {/* Filter Controls */}
       <MatchFilters
@@ -431,6 +420,7 @@ const AllMatchesCard = () => {
             columns={columns}
             data={currentMatchesOnPage}
             emptyMessage="No matches found matching your criteria."
+            className="all__matches"
           />
 
           {/* Pagination Controls */}

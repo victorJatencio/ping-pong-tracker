@@ -1,11 +1,10 @@
 import React, { useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../../contexts/AuthContext";
-import { 
-  useGetAllUsersQuery
-} from "../../store/slices/apiSlice";
+import { Link } from "react-router-dom";
+import { useGetAllUsersQuery } from "../../store/slices/apiSlice";
 import UserAvatar from "../common/UserAvatar";
-import "./LeaderboardPreview.scss";
+import DashboardCard from "../common/Card";
 
 const LeaderboardPreview = () => {
   const navigate = useNavigate();
@@ -15,7 +14,7 @@ const LeaderboardPreview = () => {
   const {
     data: allUsers = {},
     isLoading: isLoadingUsers,
-    error: usersError
+    error: usersError,
   } = useGetAllUsersQuery();
 
   // State for leaderboard data
@@ -43,30 +42,38 @@ const LeaderboardPreview = () => {
         // Fetch stats for each user sequentially
         for (const userId of userIds) {
           try {
-            const response = await fetch(`http://localhost:5000/api/stats/player/${userId}`);
-            
+            const response = await fetch(
+              `http://localhost:5000/api/stats/player/${userId}`
+            );
+
             if (response.ok) {
               const result = await response.json();
               const user = allUsers[userId];
-              
+
               if (result.success && user) {
                 playersWithStats.push({
                   player: {
                     id: userId,
-                    displayName: user.displayName || user.email?.split('@')[0] || 'Unknown Player',
+                    displayName:
+                      user.displayName ||
+                      user.email?.split("@")[0] ||
+                      "Unknown Player",
                     photoURL: user.photoURL,
                     email: user.email,
-                    useDefaultAvatar: user.useDefaultAvatar
+                    useDefaultAvatar: user.useDefaultAvatar,
                   },
                   stats: {
                     totalWins: result.data.totalWins || 0,
                     gamesPlayed: result.data.gamesPlayed || 0,
-                    winStreak: result.data.winStreak || 0
-                  }
+                    winStreak: result.data.winStreak || 0,
+                  },
                 });
               }
             } else {
-              console.warn(`Failed to fetch stats for user ${userId}:`, response.status);
+              console.warn(
+                `Failed to fetch stats for user ${userId}:`,
+                response.status
+              );
             }
           } catch (error) {
             console.warn(`Error fetching stats for user ${userId}:`, error);
@@ -86,12 +93,12 @@ const LeaderboardPreview = () => {
         // Add position numbers
         const leaderboardWithPositions = sortedPlayers.map((player, index) => ({
           ...player,
-          position: index + 1
+          position: index + 1,
         }));
 
         setLeaderboard(leaderboardWithPositions);
       } catch (error) {
-        console.error('Error fetching leaderboard data:', error);
+        console.error("Error fetching leaderboard data:", error);
         setStatsError(error);
       } finally {
         setIsLoadingStats(false);
@@ -176,13 +183,75 @@ const LeaderboardPreview = () => {
     );
   }
 
-  return (
-    <div className="leaderboard-preview">
-      <div className="leaderboard-preview__header">
-        <h3 className="leaderboard-preview__title">Leaderboard Preview</h3>
-      </div>
+  // Footer action button
+  const footerAction = (
+    <Link to="/history" className="text-decoration-none">
+      View All <i className="bi bi-arrow-right"></i>
+    </Link>
+  );
 
-      <div className="leaderboard-preview__content">
+  return (
+    // <div className="leaderboard-preview">
+
+    //   <div className="leaderboard-preview__content">
+    //     <div className="leaderboard-preview__list">
+    //       {leaderboard.map((entry) => {
+    //         const isCurrentUser = entry.player.id === currentUserId;
+
+    //         return (
+    //           <div
+    //             key={entry.player.id}
+    //             className={`leaderboard-preview__item ${
+    //               isCurrentUser ? "leaderboard-preview__item--current-user" : ""
+    //             }`}
+    //           >
+    //             <div className="leaderboard-preview__player">
+    //               <div className="leaderboard-preview__avatar">
+    //                 <UserAvatar
+    //                   user={{
+    //                     photoURL: entry.player.photoURL,
+    //                     displayName: entry.player.displayName,
+    //                     email: entry.player.email,
+    //                     useDefaultAvatar: entry.player.useDefaultAvatar
+    //                   }}
+    //                   size="small"
+    //                 />
+    //               </div>
+
+    //               <div className="leaderboard-preview__info">
+    //                 <span className="leaderboard-preview__position">
+    //                   {getPositionText(entry.position)}
+    //                 </span>
+    //                 <span className="leaderboard-preview__name">
+    //                   {isCurrentUser ? "You" : entry.player.displayName}
+    //                 </span>
+    //               </div>
+    //             </div>
+
+    //             <div className="leaderboard-preview__wins">
+    //               <span
+    //                 className={`leaderboard-preview__wins-count ${
+    //                   isCurrentUser
+    //                     ? "leaderboard-preview__wins-count--current-user"
+    //                     : ""
+    //                 }`}
+    //               >
+    //                 {entry.stats.totalWins} win
+    //                 {entry.stats.totalWins !== 1 ? "s" : ""}
+    //               </span>
+    //             </div>
+    //           </div>
+    //         );
+    //       })}
+    //     </div>
+    //   </div>
+    // </div>
+    <DashboardCard
+      title="Leaderboard Preview"
+      footerAction={footerAction}
+      className="leaderboard-preview"
+    >
+      <div className="leaderboard-preview__content d-flex flex-column card-body">
         <div className="leaderboard-preview__list">
           {leaderboard.map((entry) => {
             const isCurrentUser = entry.player.id === currentUserId;
@@ -204,21 +273,22 @@ const LeaderboardPreview = () => {
                         useDefaultAvatar: entry.player.useDefaultAvatar
                       }}
                       size="small"
+                      className="lead__avatar"
                     />
                   </div>
 
                   <div className="leaderboard-preview__info">
-                    <span className="leaderboard-preview__position">
+                    <div className="leaderboard-preview__position">
                       {getPositionText(entry.position)}
-                    </span>
-                    <span className="leaderboard-preview__name">
+                    </div>
+                    <div className="leaderboard-preview__name">
                       {isCurrentUser ? "You" : entry.player.displayName}
-                    </span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="leaderboard-preview__wins">
-                  <span
+                  <div
                     className={`leaderboard-preview__wins-count ${
                       isCurrentUser
                         ? "leaderboard-preview__wins-count--current-user"
@@ -227,25 +297,15 @@ const LeaderboardPreview = () => {
                   >
                     {entry.stats.totalWins} win
                     {entry.stats.totalWins !== 1 ? "s" : ""}
-                  </span>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
-
-        <div className="leaderboard-preview__footer">
-          <button
-            onClick={handleViewFullLeaderboard}
-            className="leaderboard-preview__view-all-btn"
-          >
-            Leaderboard
-          </button>
-        </div>
       </div>
-    </div>
+    </DashboardCard>
   );
 };
 
 export default LeaderboardPreview;
-

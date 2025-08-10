@@ -11,27 +11,21 @@ import {
   Spinner,
   Alert,
 } from "react-bootstrap";
-// import { Link } from 'react-router-dom';
-// import { useAuth } from '../../hooks/useAuth';
-// import { db } from '../../config/firebase';
-// import { collection, getDocs, onSnapshot } from 'firebase/firestore';
-// import statsService from '../../services/statsService';
 import Jumbotron from "../../components/common/Jumbotron";
 import TotalPlayersCard from "../../components/leaderboard/TotalPlayerCard";
 import YourRankCard from "../../components/leaderboard/YourRankCard";
 import TopPlayerCard from "../../components/leaderboard/TopPlayerCard";
 import HallOfFameCard from "../../components/leaderboard/HallOfFameCard";
 import PlayerRankingsCard from "../../components/leaderboard/PlayerRankingsCard";
-// import UserAvatar from '../../components/common/UserAvatar';
 
 const Leaderboard = () => {
   return (
     <div className="leaderboard-page">
-      {/* Standard Jumbotron */}
+      
       <Jumbotron
         title="Leaderboard"
         subtitle="See how you rank against other players"
-        backgroundImage="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+        backgroundImage="images/Leaderboard-Banner_web.jpg"
         height="300px"
         overlay={true}
         textAlign="left"
@@ -39,10 +33,10 @@ const Leaderboard = () => {
         className="jumbotron-success"
       />
 
-      {/* Leaderboard Content with Overlap Effect */}
+      
       <div className="jumbotron-overlap-container">
-        <Container className="py-5">
-          <Row>
+        <Container className="py-5 mobile__position_grid">
+          <Row className="g-4 mb-4">
             <Col lg={4}>
               <TotalPlayersCard />
             </Col>
@@ -53,7 +47,7 @@ const Leaderboard = () => {
             <TopPlayerCard/>
             </Col>
           </Row>
-          <Row>
+          <Row className="g-4">
             <Col lg={6}>
               <PlayerRankingsCard />
             </Col>

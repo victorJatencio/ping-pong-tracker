@@ -4,29 +4,28 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useDispatch } from 'react-redux';
 import { openMatchCreationModal } from '../../../store/slices/uiSlice';
 import GradientButton from "../Button";
+import { RiPingPongFill } from "react-icons/ri";
+import { FaHouse, FaCircleUser, FaCirclePlus  } from "react-icons/fa6";
+import { MdLeaderboard } from "react-icons/md";
+import { FaHistory } from "react-icons/fa";
 
 
-const TabNavigation = () => {
+const MobileNav = () => {
     const location = useLocation();
     const dispatch = useDispatch();
-
-
-    // Modal State Logic
-    // const [showMatchModal, setShowMatchModal] = useState(false); 
 
     const handleShowMatchModal = () => {
         dispatch(openMatchCreationModal());
     };
     
-    // const handleCloseMatchModal = () => setShowMatchModal(false); // <--- HANDLER TO CLOSE MODAL
 
     // Define tabs with their routes and labels
     const tabs = [
-        { path: '/dashboard', label: 'Dashboard'},
-        { path: '/matches', label: 'Matches'},
-        { path: '/leaderboard', label: 'Leaderboard'},
-        { path: '/history', label: 'History'},
-        { path: '/profile', label: 'Profile'},
+        { path: '/dashboard', label: <FaHouse />},
+        { path: '/matches', label: <RiPingPongFill />},
+        { path: '/leaderboard', label: <MdLeaderboard />},
+        { path: '/history', label: <FaHistory />},
+        { path: '/profile', label: <FaCircleUser />},
     ];
 
     // Prevent navigation if already on the same route
@@ -38,18 +37,19 @@ const TabNavigation = () => {
     };
 
     return (
-        <Container fluid className="border-bottom tab-navigation deskTop__nav">
-            <Container>
-                <div className="d-flex justify-content-between align-items-center">
+        <Container fluid className="border-bottom tab-navigation mobile__nav">
+            
+                <div className="d-flex flex-row justify-content-center">
                     {/* Navigation tabs on the left */}
-                    <Nav className="nav nav-underline">
+                    <Nav className="nav nav-underline mobile__navMenu">
                         {tabs.map((tab) => (
                           <Nav.Item key={tab.path}>
                              <Nav.Link
                                  as={NavLink}
                                  to={tab.path}
                                  onClick={(e) => handleTabClick(e, tab.path)}
-                                 end 
+                                 end
+                                 className="mobile__nav-item" 
                                  >
                                  {tab.label}
                              </Nav.Link>
@@ -61,17 +61,16 @@ const TabNavigation = () => {
                     <GradientButton 
                         variant="success" 
                         size="sm" 
-                        // className="create-match-btn"
+                        className="mobile__create-match-btn"
                         onClick={handleShowMatchModal}
                     >
-                        {/* <i className="bi bi-plus-circle me-1"></i> */}
-                        🏓
-                        NEW MATCH
+                        <FaCirclePlus />
+                        
                     </GradientButton>
                 </div>
-            </Container>
+           
         </Container>
     );
 };
 
-export default React.memo(TabNavigation);
+export default React.memo(MobileNav);

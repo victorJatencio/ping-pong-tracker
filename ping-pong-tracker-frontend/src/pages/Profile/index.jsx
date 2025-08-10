@@ -15,7 +15,7 @@ const Profile = () => {
       <Jumbotron
         title="Profile"
         subtitle="Manage your account settings and personal information"
-        backgroundImage="https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+        backgroundImage="images/Profile-Banner_web.jpg"
         height="300px"
         overlay={true}
         textAlign="left"
@@ -24,7 +24,7 @@ const Profile = () => {
 
       {/* Profile Content with Overlap Effect */}
       <div className="jumbotron-overlap-container">
-        <Container className="py-5">
+        <Container className="py-5 mobile__position_grid">
           <Row className="g-4">
             {/* Profile Information */}
             <Col lg={6}>

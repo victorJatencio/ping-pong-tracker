@@ -29,15 +29,18 @@ const AccountManagementCard = ({ title = "Account Management" }) => {
   return (
     <>
       <DashboardCard title={title} variant="danger">
-        <Alert variant="warning" className="mb-3">
-          <Alert.Heading className="h6">
+        <Alert variant="warning" className="mb-3 alert__text">
+          <Alert.Heading>
             <i className="bi bi-exclamation-triangle me-2"></i>
-            Danger Zone
+            <h5>Danger Zone</h5>
           </Alert.Heading>
+          <div className="alert__message">
           <p className="mb-0 small">
             Once you deactivate your account, there is no going back. Please be
             certain.
           </p>
+
+          </div>
         </Alert>
 
         <div className="d-grid">

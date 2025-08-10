@@ -17,7 +17,7 @@ const MatchHistoryFilters = ({
     <div className="mb-4">
       <Row className="g-3">
         {/* Result Filter */}
-        <Col md={4}>
+        <Col md={2}>
           <Form.Group controlId="filterResult">
             <Form.Label className="fw-bold">Result</Form.Label>
             <Form.Select
@@ -32,7 +32,7 @@ const MatchHistoryFilters = ({
         </Col>
 
         {/* Start Date Filter */}
-        <Col md={3}>
+        <Col md={2}>
           <Form.Group controlId="filterStartDate">
             <Form.Label className="fw-bold">From Date</Form.Label>
             <DatePicker
@@ -51,7 +51,7 @@ const MatchHistoryFilters = ({
         </Col>
 
         {/* End Date Filter */}
-        <Col md={3}>
+        <Col md={2}>
           <Form.Group controlId="filterEndDate">
             <Form.Label className="fw-bold">To Date</Form.Label>
             <DatePicker

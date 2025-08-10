@@ -16,7 +16,7 @@ const History = () => {
       <Jumbotron
         title="Match History"
         subtitle={`View your # matches and performance over time`}
-        backgroundImage="https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+        backgroundImage="images/History_web.jpg"
         height="300px"
         overlay={true}
         textAlign="left"
@@ -26,8 +26,8 @@ const History = () => {
 
       {/* History Content with Overlap Effect */}
       <div className="jumbotron-overlap-container">
-        <Container className="py-5">
-          <Row className="g-4">
+        <Container className="py-5 mobile__position_grid">
+          <Row className="g-4 mb-4">
             <Col lg={4}>
               <TotalMatchesCard />
             </Col>
@@ -36,12 +36,6 @@ const History = () => {
             </Col>
             <Col lg={4}>
               <LongestStreakCard />
-            </Col>
-          </Row>
-
-          <Row className="lg-12">
-            <Col lg={12}>
-              <MonthlySummaryCard />
             </Col>
           </Row>
 

@@ -18,12 +18,12 @@ const DashboardCard = ({
 }) => {
   return (
     <Card
-      className={`dashboard-card h-100 ${className}`}
+      className={`card__main dashboard-card ${className}`}
       style={{ height }}
       {...props}
     >
       {/* Card Header */}
-      <Card.Header className="bg-white border-bottom">
+      <Card.Header className="card__header_main border-bottom-0">
         <div className="d-flex justify-content-between align-items-center">
           <h5 className="mb-0">{title}</h5>
         </div>
@@ -54,12 +54,12 @@ const DashboardCard = ({
         )}
 
         {/* Content */}
-        {!isLoading && !error && <div className="flex-grow-1">{children}</div>}
+        {!isLoading && !error && <div>{children}</div>}
       </Card.Body>
 
       {/* Card Footer */}
       {footerAction && !isLoading && !error && (
-        <Card.Footer className="bg-light border-top-0 pt-3">
+        <Card.Footer className="border-top-0 pt-3 card__footer_main">
           {footerAction}
         </Card.Footer>
       )}

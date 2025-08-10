@@ -1,0 +1,16 @@
+.card__main {
+    min-height: 320px;
+}
+
+.card__header_main {
+    background-color: transparent !important;
+}
+
+.card__footer_main {
+    background-color: transparent !important;
+}
+
+[data-bs-theme="dark"] .card__main {
+    background-color: #18192C !important;
+    min-height: 320px;
+}

@@ -9,11 +9,19 @@
   overflow: hidden;
   
   // Full-width variant
+  // &.jumbotron-full-width {
+  //   width: 100vw;
+  //   margin-left: calc(-50vw + 50%);
+  //   margin-top: 0; // Touch the navigation tabs
+  //   margin-bottom: 0; // Remove bottom margin for card overlap
+  // }
   &.jumbotron-full-width {
-    width: 100vw;
-    margin-left: calc(-50vw + 50%);
-    margin-top: 0; // Touch the navigation tabs
-    margin-bottom: 0; // Remove bottom margin for card overlap
+    position: absolute;
+    width: 100%;
+    left: 0;
+    top: 16%;
+    margin-top: 0;
+    margin-bottom: 0;
   }
   
   // Overlay for better text readability over background images
@@ -148,7 +156,8 @@
 
 // Card overlap effect
 .jumbotron-overlap-container {
-  margin-top: -60px; // Negative margin to create overlap
+  // margin-top: -60px; // Negative margin to create overlap
+  margin-top: 236px;
   position: relative;
   z-index: 10; // Ensure cards appear above jumbotron
   

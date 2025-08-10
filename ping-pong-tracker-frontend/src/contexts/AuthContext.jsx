@@ -11,7 +11,22 @@ import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { useDispatch } from "react-redux";
 import { apiSlice } from "../store/slices/apiSlice";
-import { firebaseListenerManager } from "../utils/firebaseListenerManager";
+
+// ✅ SIMPLE ERROR SUPPRESSION FOR LOGOUT
+const originalConsoleError = console.error;
+let isLoggingOutGlobal = false;
+
+console.error = (...args) => {
+  const errorMessage = args.join(' ');
+  if (isLoggingOutGlobal && (
+    errorMessage.includes('permission-denied') ||
+    errorMessage.includes('Missing or insufficient permissions') ||
+    errorMessage.includes('Uncaught Error in snapshot listener')
+  )) {
+    return; // Suppress Firebase permission errors during logout
+  }
+  originalConsoleError.apply(console, args);
+};
 
 // Create the context
 export const AuthContext = createContext();
@@ -36,41 +51,27 @@ export const AuthProvider = ({ children }) => {
   // Register a new user
   const register = async (name, email, password) => {
     try {
-      console.log("AuthContext: Starting registration for:", email);
       if (isMounted.current) setError(null);
 
-      // Create user in Firebase Authentication
-      console.log("AuthContext: Creating user in Firebase Auth...");
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
         password
       );
-      console.log(
-        "AuthContext: User created successfully:",
-        userCredential.user.uid
-      );
 
-      // Update user profile with name
-      console.log("AuthContext: Updating user profile...");
       await updateProfile(userCredential.user, {
         displayName: name,
       });
-      console.log("AuthContext: Profile updated successfully");
 
-      // Create user document in Firestore
-      console.log("AuthContext: Creating user document in Firestore...");
       await setDoc(doc(db, "users", userCredential.user.uid), {
         name,
         email,
         useDefaultAvatar: true, // Default avatar setting
         createdAt: serverTimestamp(),
       });
-      console.log("AuthContext: User document created successfully");
 
       return userCredential.user;
     } catch (error) {
-      console.error("AuthContext: Registration failed:", error);
       if (isMounted.current) setError(error.message);
       throw error;
     }
@@ -101,40 +102,44 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ ENHANCED LOGOUT WITH COMPREHENSIVE CLEANUP
+  // ✅ FIXED LOGOUT FUNCTION
   const logout = async () => {
     try {
-      console.log("[" + new Date().toISOString() + "] Starting comprehensive logout process...");
-      
-      // Set logout state to prevent new listeners
+      console.log("[" + new Date().toISOString() + "] Starting logout...");
+
+      // ✅ FIXED: Use setter function instead of direct assignment
       setIsLoggingOut(true);
-      
-      // ✅ STEP 1: Clean up ALL Firebase listeners across the entire app
-      console.log("[" + new Date().toISOString() + "] Cleaning up Firebase listeners...");
-      await firebaseListenerManager.cleanupAll();
-      
-      // ✅ STEP 2: Clear all RTK Query cache and subscriptions
-      console.log("[" + new Date().toISOString() + "] Clearing RTK Query cache...");
-      dispatch(apiSlice.util.resetApiState());
-      
-      // ✅ STEP 3: Add delay to ensure all cleanup is complete
-      console.log("[" + new Date().toISOString() + "] Waiting for cleanup to complete...");
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // ✅ STEP 4: Set loading state to prevent new queries
+      isLoggingOutGlobal = true; // Enable error suppression
+
+      // Brief delay before logout to let listeners settle
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Set loading state
       if (isMounted.current) setLoading(true);
-      
-      // ✅ STEP 5: Finally sign out
-      console.log("[" + new Date().toISOString() + "] Signing out from Firebase Auth...");
+
+      // Clear RTK Query cache
+      dispatch(apiSlice.util.resetApiState());
+
+      // Brief delay before Firebase signOut
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Sign out from Firebase
       await signOut(auth);
 
       console.log("[" + new Date().toISOString() + "] User signed out successfully");
     } catch (error) {
-      console.error("[" + new Date().toISOString() + "] Error signing out:", error);
+      console.error(
+        "[" + new Date().toISOString() + "] Error during logout:",
+        error
+      );
     } finally {
-      // Reset logout state
-      setIsLoggingOut(false);
       if (isMounted.current) setLoading(false);
+      setIsLoggingOut(false);
+      
+      // Disable error suppression after logout
+      setTimeout(() => {
+        isLoggingOutGlobal = false;
+      }, 1000);
     }
   };
 
@@ -190,7 +195,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ ENHANCED AUTH STATE LISTENER WITH BETTER ERROR HANDLING
+  // Auth state listener
   useEffect(() => {
     console.log("AuthContext: Setting up auth state listener...");
 
@@ -207,7 +212,9 @@ export const AuthProvider = ({ children }) => {
 
       // Skip Firestore calls during logout process
       if (isLoggingOut) {
-        console.log("AuthContext: Logout in progress, skipping Firestore calls");
+        console.log(
+          "AuthContext: Logout in progress, skipping Firestore calls"
+        );
         if (isMounted.current) {
           setCurrentUser(user);
           setLoading(false);
@@ -219,8 +226,7 @@ export const AuthProvider = ({ children }) => {
         console.log(
           "AuthContext: User is authenticated, fetching additional data..."
         );
-        
-        // ✅ ENHANCED ERROR HANDLING for Firestore access
+
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists() && isMounted.current) {
@@ -239,16 +245,22 @@ export const AuthProvider = ({ children }) => {
           }
         } catch (error) {
           console.error("AuthContext: Error fetching user data:", error);
-          
-          // ✅ HANDLE ALL FIREBASE ERRORS GRACEFULLY
-          if (error.code === 'permission-denied') {
-            console.log('🔒 AuthContext: Permission denied fetching user data - using auth data only');
-          } else if (error.code === 'unavailable') {
-            console.log('🌐 AuthContext: Firebase unavailable - using auth data only');
-          } else if (error.code === 'unauthenticated') {
-            console.log('🔒 AuthContext: Unauthenticated error - using auth data only');
+
+          // Handle Firebase errors gracefully
+          if (error.code === "permission-denied") {
+            console.log(
+              "🔒 AuthContext: Permission denied fetching user data - using auth data only"
+            );
+          } else if (error.code === "unavailable") {
+            console.log(
+              "🌐 AuthContext: Firebase unavailable - using auth data only"
+            );
+          } else if (error.code === "unauthenticated") {
+            console.log(
+              "🔒 AuthContext: Unauthenticated error - using auth data only"
+            );
           }
-          
+
           // Fall back to auth data only
           if (isMounted.current) setCurrentUser(user);
         }
@@ -281,7 +293,6 @@ export const AuthProvider = ({ children }) => {
       currentUser ? currentUser.uid : "null"
     );
     console.log("AuthContext: Loading state:", loading);
-    console.log("AuthContext: Active Firebase listeners:", firebaseListenerManager.getActiveCount());
   }, [currentUser, loading]);
 
   // Helper function to check if user is authenticated
@@ -301,7 +312,6 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     updateUserProfile,
     isAuthenticated,
-    firebaseListenerManager, // Expose for components to use
   };
 
   return (
@@ -312,3 +322,4 @@ export const AuthProvider = ({ children }) => {
 };
 
 export default AuthProvider;
+

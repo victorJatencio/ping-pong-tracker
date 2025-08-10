@@ -25,7 +25,7 @@ import { toast } from "react-toastify";
 
 import AllMatchesCard from "../../components/match/AllMatches/AllMatchesCard";
 import RecentActivityCard from '../../components/dashboard/RecentActivityCard';
-import OngoingMatchesCard from '../../components/dashboard/OngoingMatchesCard'; 
+import OngoingMatchesCard from "../../components/dashboard/OngoingMatchesCard";
 
 const Matches = () => {
   return (
@@ -34,7 +34,7 @@ const Matches = () => {
       <Jumbotron
         title="Matches"
         subtitle="Manage your ping-pong matches and invitations"
-        backgroundImage="https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+        backgroundImage="images/Matches-Banner_web.jpg"
         height="300px"
         overlay={true}
         textAlign="left"
@@ -43,23 +43,17 @@ const Matches = () => {
 
       {/* Matches Content with Overlap Effect */}
       <div className="jumbotron-overlap-container">
-        <Container fluid className="py-5">
+        <Container fluid className="py-5 mobile__position_grid">
           <Row className="g-4">
             {/* All Matches Table Card (main feature) */}
             <Col lg={12}>
               <AllMatchesCard />
             </Col>
-
-            {/* Reused Cards from Dashboard */}
-            <Col lg={6} xl={4}>
-              {" "}
-              {/* Adjust column sizes as needed */}
+            <Col lg={6}>
               <RecentActivityCard />
             </Col>
-            <Col lg={6} xl={8}>
-              {" "}
-              {/* Adjust column sizes as needed */}
-              <OngoingMatchesCard />
+            <Col lg={6}>
+              <OngoingMatchesCard/>
             </Col>
           </Row>
         </Container>

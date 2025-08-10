@@ -1,10 +1,9 @@
-@import '../../styles/variables';
-
 .win-loss-ratio {
-  background: white;
-  border-radius: 12px;
+//   background: white;
+//   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   padding: 0;
+  min-height: 320px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -93,21 +92,19 @@
     height: 12px;
     border-radius: 50%;
     flex-shrink: 0;
-
-    &--wins {
-      background-color: #28a745;
-    }
-
-    &--losses {
-      background-color: #dc3545;
+    transition: background-color 0.3s ease;
+    &:hover {
+      transform: scale(1.1);
+      transition: transform 0.2s ease;
     }
   }
 
   &__legend-info {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.125rem;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
   }
 
   &__legend-label {
@@ -248,3 +245,21 @@
   100% { transform: rotate(360deg); }
 }
 
+[data-bs-theme="dark"] .win-loss-ratio {
+  background-color: #18192C !important;
+  
+  .win-loss-ratio__percentage-value {
+    color: $dark-text-primary !important;
+  }
+
+  .win-loss-ratio__legend-label {
+    color: $dark-text-primary !important;
+  }
+
+  .win-loss-ratio__legend-value {
+    color: $dark-text-secondary !important;
+  }
+  
+  // ✅ OPTIONAL: Adjust chart colors for dark mode
+  // You can add specific dark mode color overrides here if needed
+}

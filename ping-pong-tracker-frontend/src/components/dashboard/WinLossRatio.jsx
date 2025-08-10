@@ -2,7 +2,6 @@ import React, { useContext, useMemo } from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useGetPlayerStatsFromBackendQuery } from '../../store/slices/apiSlice';
-import './WinLossRatio.scss';
 
 const WinLossRatio = () => {
   const { currentUser } = useContext(AuthContext);
@@ -15,6 +14,29 @@ const WinLossRatio = () => {
   } = useGetPlayerStatsFromBackendQuery(currentUser?.uid, {
     skip: !currentUser?.uid,
   });
+
+  // ✅ CUSTOMIZABLE CHART COLORS
+  const chartColors = {
+    // Option 1: Brand colors (using your app's theme)
+    wins: '#5C6BC0',      // Your brand blue
+    losses: '#bfd7e3',    // Red for losses
+    
+    // Option 2: Success/Danger colors
+    // wins: '#4caf50',      // Green for wins
+    // losses: '#f44336',    // Red for losses
+    
+    // Option 3: Custom gradient-inspired colors
+    // wins: '#ff6b9d',      // Pink (from your gradient button)
+    // losses: '#ff8a56',    // Orange (from your gradient button)
+    
+    // Option 4: Professional blue tones
+    // wins: '#2196f3',      // Blue
+    // losses: '#607d8b',    // Blue-gray
+    
+    // Option 5: Modern purple/pink theme
+    // wins: '#9c27b0',      // Purple
+    // losses: '#e91e63',    // Pink
+  };
 
   // Calculate chart data from player stats
   const chartData = useMemo(() => {
@@ -35,9 +57,15 @@ const WinLossRatio = () => {
       datasets: [
         {
           data: [wins, losses],
-          backgroundColor: ["#28a745", "#dc3545"],
+          backgroundColor: [chartColors.wins, chartColors.losses],
           borderWidth: 0,
           cutout: "70%",
+          hoverBackgroundColor: [
+            chartColors.wins + 'CC', // Add transparency on hover
+            chartColors.losses + 'CC'
+          ],
+          hoverBorderWidth: 2,
+          hoverBorderColor: '#ffffff',
         },
       ],
     };
@@ -61,9 +89,26 @@ const WinLossRatio = () => {
             return `${label}: ${value} (${percentage}%)`;
           },
         },
+        // ✅ OPTIONAL: Customize tooltip appearance
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: '#ffffff',
+        bodyColor: '#ffffff',
+        borderColor: chartColors.wins,
+        borderWidth: 1,
       },
     },
-  }), []);
+    // ✅ OPTIONAL: Add animation
+    animation: {
+      animateRotate: true,
+      animateScale: true,
+      duration: 1000,
+    },
+    // ✅ OPTIONAL: Add interaction
+    interaction: {
+      intersect: false,
+      mode: 'index',
+    },
+  }), [chartColors]);
 
   // Calculate win percentage
   const winPercentage = useMemo(() => {
@@ -79,100 +124,93 @@ const WinLossRatio = () => {
   }, [playerStats]);
 
   if (isLoading) {
+    
     return (
-      <div className="win-loss-ratio">
-        <div className="win-loss-ratio__header">
-          <h3 className="win-loss-ratio__title">Win/Loss Ratio</h3>
-        </div>
-        <div className="win-loss-ratio__content">
-          <div className="win-loss-ratio__loading">
-            <div className="loading-spinner"></div>
+      <div className="card">
+        <div className="card-body">
+          <h5 className="card-title">Win/Loss Ratio</h5>
+          <div className="loading-spinner"></div>
+          <p className="card-text">
             <span>Loading stats...</span>
-          </div>
+          </p>
         </div>
       </div>
-    );
+    )
   }
 
   if (error) {
+    
     return (
-      <div className="win-loss-ratio">
-        <div className="win-loss-ratio__header">
-          <h3 className="win-loss-ratio__title">Win/Loss Ratio</h3>
-        </div>
-        <div className="win-loss-ratio__content">
-          <div className="win-loss-ratio__error">
-            <p>Failed to load stats</p>
-            <button 
-              className="retry-button"
-              onClick={refetch}
-            >
-              Try Again
-            </button>
-          </div>
+      <div className="card">
+        <div className="card-body">
+          <h5 className="card-title">Win/Loss Ratio</h5>
+          <div className="loading-spinner"></div>
+          <p className="card-text">
+            <span>Failed to load stats...</span>
+          </p>
         </div>
       </div>
-    );
+    )
   }
 
   if (!playerStats || !chartData) {
+
     return (
-      <div className="win-loss-ratio">
-        <div className="win-loss-ratio__header">
-          <h3 className="win-loss-ratio__title">Win/Loss Ratio</h3>
-        </div>
-        <div className="win-loss-ratio__content">
-          <div className="win-loss-ratio__empty">
-            <p>No matches played yet</p>
+      <div className="card">
+        <div className="card-body">
+          <h5 className="card-title">Win/Loss Ratio</h5>
+          <div className="loading-spinner"></div>
+          <p className="card-text">
+            No matches played yet
             <span>Play some matches to see your win/loss ratio!</span>
-          </div>
+          </p>
         </div>
       </div>
-    );
+    )
   }
 
+
   return (
-    <div className="win-loss-ratio">
-      <div className="win-loss-ratio__header">
-        <h3 className="win-loss-ratio__title">Win/Loss Ratio</h3>
-      </div>
-      
-      <div className="win-loss-ratio__content">
-        <div className="win-loss-ratio__chart-container">
-          <div className="win-loss-ratio__chart">
-            <Doughnut data={chartData} options={chartOptions} />
+    <div className="card win-loss-ratio">
+        <div className="card-body">
+          <h5 className="card-title">Win/Loss Ratio</h5>
+
+          <div className='win-loss-ratio__content'>
+            <div className="win-loss-ratio__chart">
+              <Doughnut data={chartData} options={chartOptions} />
+            </div>
           </div>
-          
-          <div className="win-loss-ratio__percentage">
-            <div className="win-loss-ratio__percentage-value">
+
+          <div className='win-loss-ratio__percentage'>
+            <div className='win-loss-ratio__percentage-value'>
               {winPercentage}%
             </div>
-            <div className="win-loss-ratio__percentage-label">
+            <div className='win-loss-ratio__percentage-label'>
               Win Rate
             </div>
           </div>
-        </div>
-        
-        <div className="win-loss-ratio__legend">
-          <div className="win-loss-ratio__legend-item">
-            <div className="win-loss-ratio__legend-color win-loss-ratio__legend-color--wins"></div>
-            <div className="win-loss-ratio__legend-info">
-              <span className="win-loss-ratio__legend-label">Wins</span>
-              <span className="win-loss-ratio__legend-value">{playerStats.totalWins || 0}</span>
+
+          <div className='win-loss-ratio__legend'>
+          <div className='win-loss-ratio__legend-item'>
+            <div className='win-loss-ratio__legend-color win-loss-ratio__legend-color--wins' style={{ backgroundColor: chartColors.wins }}></div>
+            <div className='win-loss-ratio__legend-info'>
+              <span className='win-loss-ratio__legend-label'>Wins</span>
+              <span className='win-loss-ratio__legend-value'>{playerStats.totalWins || 0}</span>
             </div>
           </div>
           
-          <div className="win-loss-ratio__legend-item">
-            <div className="win-loss-ratio__legend-color win-loss-ratio__legend-color--losses"></div>
-            <div className="win-loss-ratio__legend-info">
-              <span className="win-loss-ratio__legend-label">Losses</span>
-              <span className="win-loss-ratio__legend-value">{playerStats.totalLosses || 0}</span>
+          <div className='win-loss-ratio__legend-item'>
+            <div className='win-loss-ratio__legend-color win-loss-ratio__legend-color--losses' style={{ backgroundColor: chartColors.losses }}></div>
+            <div className='win-loss-ratio__legend-info'>
+              <span className='win-loss-ratio__legend-label'>Losses</span>
+              <span className='win-loss-ratio__legend-value'>{playerStats.totalLosses || 0}</span>
             </div>
           </div>
         </div>
+
+        </div>
       </div>
-    </div>
-  );
+  )
 };
 
 export default WinLossRatio;

@@ -1,5 +1,7 @@
 // src/components/history/LongestStreakCard.jsx
-import React, { useContext } from 'react';
+// Fixed version using the EXACT same data extraction logic as MonthlySummaryCard
+
+import React, { useContext, useMemo } from 'react';
 import { AuthContext } from '../../../contexts/AuthContext';
 import { useGetPlayerStatsFromBackendQuery } from '../../../store/slices/apiSlice';
 import DashboardCard from '../../common/Card';
@@ -7,17 +9,40 @@ import DashboardCard from '../../common/Card';
 const LongestStreakCard = ({ title = "Longest Streak" }) => {
   const { currentUser } = useContext(AuthContext);
 
-  // Use the working stats endpoint that we've already fixed
+  // ✅ EXACT SAME QUERY AS MONTHLYSUMMARYCARD
   const { 
-    data: statsResponse, 
+    data: userStats, 
     error, 
     isLoading 
   } = useGetPlayerStatsFromBackendQuery(currentUser?.uid, {
     skip: !currentUser?.uid
   });
 
-  // Get longest streak from the backend stats
-  const longestStreak = statsResponse?.data?.maxWinStreak || 0;
+  // ✅ EXACT SAME DATA EXTRACTION LOGIC AS MONTHLYSUMMARYCARD
+  const streakStats = useMemo(() => {
+    // Handle the case where userStats might be the full response object
+    const stats = userStats?.data || userStats;
+    
+    console.log('🔍 LongestStreakCard - Raw userStats:', userStats);
+    console.log('🔍 LongestStreakCard - Processed stats:', stats);
+
+    if (!stats) {
+      return {
+        maxStreak: 0,
+        currentStreak: 0
+      };
+    }
+
+    const result = {
+      maxStreak: stats.maxWinStreak || 0,
+      currentStreak: stats.winStreak || 0
+    };
+
+    console.log('🔍 LongestStreakCard - Final streakStats:', result);
+    console.log('🔍 LongestStreakCard - Available fields:', Object.keys(stats));
+    
+    return result;
+  }, [userStats]);
 
   // Get streak description
   const getStreakDescription = (streak) => {
@@ -62,7 +87,8 @@ const LongestStreakCard = ({ title = "Longest Streak" }) => {
     return (
       <DashboardCard title={title}>
         <div className="alert alert-danger" role="alert">
-          Error loading streak data
+          <div>Error loading streak data</div>
+          <small className="text-muted">Error: {error.message || 'Unknown error'}</small>
         </div>
       </DashboardCard>
     );
@@ -72,39 +98,21 @@ const LongestStreakCard = ({ title = "Longest Streak" }) => {
     <DashboardCard title={title}>
       <div className="text-center py-3">
         {/* Streak Icon */}
-        <div className="mb-2">
+        {/* <div className="mb-2">
           <span className="fs-1">
-            {getStreakIcon(longestStreak)}
+            {getStreakIcon(streakStats.maxStreak)}
           </span>
-        </div>
+        </div> */}
 
         {/* Streak Number */}
-        <h1 className={`display-4 fw-bold mb-2 ${getStreakColor(longestStreak)}`}>
-          {longestStreak}
+        <h1 className={`display-4 fw-bold mb-2 ${getStreakColor(streakStats.maxStreak)}`}>
+          {streakStats.maxStreak}
         </h1>
 
         {/* Streak Description */}
         <p className="text-muted mb-1">
-          {getStreakDescription(longestStreak)}
+          {getStreakDescription(streakStats.maxStreak)}
         </p>
-
-        {/* Additional Info */}
-        {statsResponse?.data && (
-          <small className="text-muted d-block mb-2">
-            Current streak: {statsResponse.data.winStreak || 0}
-          </small>
-        )}
-
-        {/* Encouragement Message */}
-        {longestStreak === 0 ? (
-          <small className="text-muted">
-            Win your first match to start a streak!
-          </small>
-        ) : (
-          <small className="text-muted">
-            Keep playing to beat your record!
-          </small>
-        )}
       </div>
     </DashboardCard>
   );

@@ -1,5 +1,6 @@
 import React, { useContext, useMemo } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
+import { Link } from "react-router-dom";
 import {
   useGetRecentMatchesQuery,
   useGetAllUsersQuery,
@@ -162,18 +163,18 @@ const RecentActivityCard = () => {
     );
   }
 
+  // Footer action button
+  const footerAction = (
+    <Link to="/history" className="text-decoration-none">
+      View All <i className="bi bi-arrow-right"></i>
+    </Link>
+  );
+
+
   return (
     <DashboardCard
       title="Recent Activity"
-      footerAction={
-        <button
-          className="btn btn-outline-primary btn-sm"
-          onClick={() => console.log("Navigate to full Match History")}
-          disabled={tableData.length === 0}
-        >
-          View All
-        </button>
-      }
+      footerAction={footerAction}
     >
       <GenericTable
         columns={columns}

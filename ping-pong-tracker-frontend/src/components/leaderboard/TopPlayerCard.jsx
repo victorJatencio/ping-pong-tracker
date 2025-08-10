@@ -146,12 +146,12 @@ const TopPlayerCard = ({ title = "Top Player" }) => {
     <DashboardCard title={title}>
       <div className="text-center py-3">
         {/* Crown icon for #1 */}
-        <div className="mb-3">
+        <div className="mb-3 top__player_crown">
           <span className="fs-1">👑</span>
         </div>
         
         {/* Player Avatar */}
-        <div className="mb-3">
+        <div className="mb-3 d-flex justify-content-center">
           <UserAvatar
             user={{ 
               photoURL: topPlayer.avatar,
@@ -159,7 +159,7 @@ const TopPlayerCard = ({ title = "Top Player" }) => {
               useDefaultAvatar: topPlayer.useDefaultAvatar
             }}
             size="lg"
-            className="border border-warning border-3"
+            className="border-3 top__player_avatar"
           />
         </div>
 

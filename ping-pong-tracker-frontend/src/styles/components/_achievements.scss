@@ -1,32 +1,26 @@
 // AchievementsCard.scss - Clean Production Version
 .achievements-card {
   .achievements-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 1.5rem;
-    padding: 1rem 0;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    // padding: 1rem 0;
 
     @media (max-width: 768px) {
-      grid-template-columns: 1fr;
-      gap: 1rem;
+      
     }
   }
 
   .achievement-item {
     display: flex;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 0.75rem;
-    padding: 1rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    transition: all 0.3s ease;
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      border-color: #cbd5e1;
-    }
+    // padding: 1rem;
+    // background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
 
     @media (max-width: 768px) {
       justify-content: center;
@@ -38,12 +32,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 48px;
-    height: 48px;
+    width: 90px;
+    height: 90px;
     border-radius: 50%;
     font-size: 1.5rem;
     color: white;
     flex-shrink: 0;
+
+    img.bi-trophy-fill {
+        width: 90px;
+        border-radius: 50px;
+    }
 
     &.trophy {
       background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
@@ -64,6 +63,7 @@
 
   .achievement-content {
     flex: 1;
+    text-align: center;
     min-width: 0;
 
     @media (max-width: 768px) {
@@ -72,7 +72,7 @@
   }
 
   .achievement-number {
-    font-size: 1.75rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #1e293b;
     line-height: 1.2;
@@ -179,5 +179,9 @@
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+[data-bs-theme="dark"] .achievement-number {
+    color: $gray-400;
 }
 

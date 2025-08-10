@@ -1,0 +1,12 @@
+table.gen__table {
+    --bs-table-bg: $dark-nav-tabs;
+
+    td {
+        color: $gray-900;
+        font-weight: 500;
+    }
+}
+
+[data-bs-theme="dark"] table.gen__table td {
+    color: $gray-400;
+}
