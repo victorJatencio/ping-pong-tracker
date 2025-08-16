@@ -5,6 +5,8 @@ import {
   useGetAllUsersQuery,
 } from "../../store/slices/apiSlice";
 import DashboardCard from "../common/Card";
+import CardMessage from "../../components/common/cardMessages";
+import { RiPingPongFill } from "react-icons/ri";
 import UserAvatar from "../common/UserAvatar";
 import { Badge } from "react-bootstrap";
 import { useAuth } from "../../hooks/useAuth";
@@ -194,9 +196,11 @@ const RecentMatchesCard = () => {
     >
       {recentMatches.length === 0 ? (
         // Empty state
-        <div className="text-center py-4">
-          <i className="bi bi-controller fs-1 text-muted d-block mb-2"></i>
-          <p className="text-muted mb-0">No recent completed matches</p>
+        <div className="text-center py-3">
+          <CardMessage
+              icon= {<RiPingPongFill />}
+              text="No Recent Matches."
+            />
         </div>
       ) : (
         // Matches list

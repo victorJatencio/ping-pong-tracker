@@ -1,6 +1,14 @@
-// .leaderboard-preview {
+.leaderboard-preview {
+    max-height: 320px;
+}
 
-// }
+.leaderboard-preview > .card-body {
+    overflow: scroll;
+    position: relative;
+    scroll-behavior: smooth;
+
+}
+
 .leaderboard-preview__list {
     display: flex;
     flex-direction: column;

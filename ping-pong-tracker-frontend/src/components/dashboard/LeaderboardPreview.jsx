@@ -191,61 +191,6 @@ const LeaderboardPreview = () => {
   );
 
   return (
-    // <div className="leaderboard-preview">
-
-    //   <div className="leaderboard-preview__content">
-    //     <div className="leaderboard-preview__list">
-    //       {leaderboard.map((entry) => {
-    //         const isCurrentUser = entry.player.id === currentUserId;
-
-    //         return (
-    //           <div
-    //             key={entry.player.id}
-    //             className={`leaderboard-preview__item ${
-    //               isCurrentUser ? "leaderboard-preview__item--current-user" : ""
-    //             }`}
-    //           >
-    //             <div className="leaderboard-preview__player">
-    //               <div className="leaderboard-preview__avatar">
-    //                 <UserAvatar
-    //                   user={{
-    //                     photoURL: entry.player.photoURL,
-    //                     displayName: entry.player.displayName,
-    //                     email: entry.player.email,
-    //                     useDefaultAvatar: entry.player.useDefaultAvatar
-    //                   }}
-    //                   size="small"
-    //                 />
-    //               </div>
-
-    //               <div className="leaderboard-preview__info">
-    //                 <span className="leaderboard-preview__position">
-    //                   {getPositionText(entry.position)}
-    //                 </span>
-    //                 <span className="leaderboard-preview__name">
-    //                   {isCurrentUser ? "You" : entry.player.displayName}
-    //                 </span>
-    //               </div>
-    //             </div>
-
-    //             <div className="leaderboard-preview__wins">
-    //               <span
-    //                 className={`leaderboard-preview__wins-count ${
-    //                   isCurrentUser
-    //                     ? "leaderboard-preview__wins-count--current-user"
-    //                     : ""
-    //                 }`}
-    //               >
-    //                 {entry.stats.totalWins} win
-    //                 {entry.stats.totalWins !== 1 ? "s" : ""}
-    //               </span>
-    //             </div>
-    //           </div>
-    //         );
-    //       })}
-    //     </div>
-    //   </div>
-    // </div>
     <DashboardCard
       title="Leaderboard Preview"
       footerAction={footerAction}

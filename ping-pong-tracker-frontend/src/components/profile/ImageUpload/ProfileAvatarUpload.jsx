@@ -133,7 +133,7 @@ const ProfileAvatarUpload = ({
         )}
 
         {/* Current Avatar Display */}
-        <div className="text-center mb-4">
+        <div className="d-flex flex-column align-items-center mb-4">
           <h6 className="mb-3">Current Avatar</h6>
           <UserAvatar
             user={currentUser}
@@ -223,7 +223,7 @@ const ProfileAvatarUpload = ({
         </Row>
 
         {/* Help Text */}
-        <div className="mt-3 p-3 bg-light rounded">
+        <div className="mt-3 p-3 rounded">
           <h6 className="small fw-bold mb-2">💡 Avatar Options:</h6>
           <ul className="small mb-0 ps-3">
             <li><strong>Upload Image:</strong> Choose a custom photo from your device</li>

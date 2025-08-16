@@ -1,4 +1,9 @@
 import React, { useState } from "react";
+
+import { useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../../../contexts/AuthContext";
+
 import { Button, Alert, Form, Modal } from "react-bootstrap";
 import DashboardCard from "../../common/Card";
 
@@ -7,22 +12,40 @@ const AccountManagementCard = ({ title = "Account Management" }) => {
   const [deactivateConfirm, setDeactivateConfirm] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
 
+  const { currentUser, deleteAccount } = useContext(AuthContext);
+  const navigate = useNavigate();
+
   const handleDeactivateAccount = async () => {
     if (!deactivateConfirm) {
       alert("Please confirm account deactivation by checking the box");
       return;
     }
 
+    if (!currentUser?.uid) {
+      alert("No user logged in");
+      return;
+    }
+
     setIsDeactivating(true);
     try {
-      // TODO: Implement account deactivation logic
-      alert("Account deactivation initiated");
-      setShowDeactivateModal(false);
+      // ✅ UPDATED: Use deleteAccount from AuthContext
+      await deleteAccount();
+
+      // Account deleted successfully
+      alert(
+        "Account deleted successfully. You will be redirected to the home page."
+      );
+
+      // Navigate to home page (AuthContext already cleared storage)
+      navigate("/");
     } catch (error) {
-      console.error("Error deactivating account:", error);
-      alert("Failed to deactivate account. Please try again.");
+      console.error("Error deleting account:", error);
+      alert(
+        `Failed to delete account: ${error.message || "Please try again."}`
+      );
     } finally {
       setIsDeactivating(false);
+      setShowDeactivateModal(false);
     }
   };
 
@@ -35,11 +58,10 @@ const AccountManagementCard = ({ title = "Account Management" }) => {
             <h5>Danger Zone</h5>
           </Alert.Heading>
           <div className="alert__message">
-          <p className="mb-0 small">
-            Once you deactivate your account, there is no going back. Please be
-            certain.
-          </p>
-
+            <p className="mb-0 small">
+              Once you deactivate your account, there is no going back. Please
+              be certain.
+            </p>
           </div>
         </Alert>
 

@@ -55,7 +55,7 @@ const LongestStreakCard = ({ title = "Longest Streak" }) => {
 
   // Get streak color based on length
   const getStreakColor = (streak) => {
-    if (streak === 0) return 'text-muted';
+    if (streak === 0) return 'text-primary';
     if (streak < 3) return 'text-success';
     if (streak < 5) return 'text-warning';
     if (streak < 10) return 'text-info';
@@ -97,14 +97,7 @@ const LongestStreakCard = ({ title = "Longest Streak" }) => {
   return (
     <DashboardCard title={title}>
       <div className="text-center py-3">
-        {/* Streak Icon */}
-        {/* <div className="mb-2">
-          <span className="fs-1">
-            {getStreakIcon(streakStats.maxStreak)}
-          </span>
-        </div> */}
 
-        {/* Streak Number */}
         <h1 className={`display-4 fw-bold mb-2 ${getStreakColor(streakStats.maxStreak)}`}>
           {streakStats.maxStreak}
         </h1>

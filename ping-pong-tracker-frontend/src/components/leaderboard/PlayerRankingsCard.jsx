@@ -359,7 +359,7 @@ const PlayerRankingsCard = ({
         )
       }
     >
-      {showFilters && (
+      {/* {showFilters && (
         <LeaderboardFilters
           search={search}
           winRateRange={winRateRange}
@@ -374,7 +374,7 @@ const PlayerRankingsCard = ({
           onResetFilters={resetFilters}
           hasActiveFilters={hasActiveFilters}
         />
-      )}
+      )} */}
 
       <GenericTable
         columns={columns}

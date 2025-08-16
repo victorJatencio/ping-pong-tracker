@@ -2,6 +2,8 @@ import React, { useContext, useMemo } from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useGetPlayerStatsFromBackendQuery } from '../../store/slices/apiSlice';
+import { RiPingPongFill } from "react-icons/ri";
+import CardMessage from "../../components/common/cardMessages";
 
 const WinLossRatio = () => {
   const { currentUser } = useContext(AuthContext);
@@ -156,14 +158,19 @@ const WinLossRatio = () => {
   if (!playerStats || !chartData) {
 
     return (
-      <div className="card">
+      <div className="card win-loss-ratio">
         <div className="card-body">
           <h5 className="card-title">Win/Loss Ratio</h5>
-          <div className="loading-spinner"></div>
-          <p className="card-text">
-            No matches played yet
-            <span>Play some matches to see your win/loss ratio!</span>
-          </p>
+
+          <div className='win-loss-ratio__content'>
+            <div className="loading-spinner"></div>
+
+            <CardMessage
+              icon= {<RiPingPongFill />}
+              text="No matches played yet. Play some matches to see your win/loss ratio!"
+            />
+
+          </div>
         </div>
       </div>
     )

@@ -15,6 +15,8 @@ import { openMatchCreationModal } from "../../store/slices/uiSlice";
 import UpdateScoreModal from "../match/MatchCreate/UpdatedScoreModal";
 import DashboardCard from "../common/Card";
 import GradientButton from "../common/Button";
+import CardMessage from "../../components/common/cardMessages";
+import { RiPingPongFill } from "react-icons/ri";
 
 /**
  * Updated OngoingMatches component that properly passes data to the modal
@@ -226,19 +228,13 @@ const OngoingMatchesCard = () => {
       <DashboardCard
         title="Ongoing Matches"
         footerAction={footerAction}
-        className="recent-matches-card"
+        className="ongoing__matches-card"
       >
         <div className="no-invitations">
-          <div className="mb-3">
-            <i
-              className="bi bi-calendar-x"
-              style={{ fontSize: "3rem", color: "#6c757d" }}
-            ></i>
-          </div>
-          <h5 className="standard__card_title">No Ongoing Matches</h5>
-          <p className="standard__card_message">
-            You don't have any scheduled or in-progress matches at the moment.
-          </p>
+            <CardMessage
+                icon= {<RiPingPongFill />}
+                text="You don't have any scheduled or in-progress matches at the moment."
+            />
           <GradientButton
             variant="success"
             size="sm"

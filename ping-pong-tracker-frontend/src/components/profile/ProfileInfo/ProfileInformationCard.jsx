@@ -28,6 +28,14 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
   const [updateProfile, { isLoading: updateLoading, error: updateError }] =
     useUpdateUserProfileMutation();
 
+  const combinedUserData = {
+    displayName: userProfile?.displayName || userProfile?.name || currentUser?.displayName || currentUser?.name || 'Unknown User',
+    email: userProfile?.email || currentUser?.email || '',
+    bio: userProfile?.bio || '',
+    photoURL: userProfile?.photoURL || currentUser?.photoURL || null,
+    useDefaultAvatar: userProfile?.useDefaultAvatar ?? currentUser?.useDefaultAvatar ?? true,
+  };
+
   // Form state
   const [formData, setFormData] = useState({
     displayName: "",
@@ -37,14 +45,19 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
 
   // Initialize form data when profile loads
   React.useEffect(() => {
-    if (userProfile) {
-      setFormData({
-        displayName: userProfile.displayName || "",
-        email: userProfile.email || "",
-        bio: userProfile.bio || "",
-      });
-    }
-  }, [userProfile]);
+    // if (userProfile) {
+    //   setFormData({
+    //     displayName: userProfile.displayName || "",
+    //     email: userProfile.email || "",
+    //     bio: userProfile.bio || "",
+    //   });
+    // }
+    setFormData({
+      displayName: combinedUserData.displayName,
+      email: combinedUserData.email,
+      bio: combinedUserData.bio,
+    });
+  }, [userProfile, currentUser]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -72,13 +85,11 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
 
   const handleCancel = () => {
     // Reset form data to original values
-    if (userProfile) {
-      setFormData({
-        displayName: userProfile.displayName || "",
-        email: userProfile.email || "",
-        bio: userProfile.bio || "",
-      });
-    }
+    setFormData({
+      displayName: combinedUserData.displayName,
+      email: combinedUserData.email,
+      bio: combinedUserData.bio,
+    });
     setIsEditing(false);
   };
 
@@ -93,7 +104,17 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
       .slice(0, 2);
   };
 
-  if (profileLoading) {
+  // if (profileLoading) {
+  //   return (
+  //     <DashboardCard title={title}>
+  //       <div className="text-center py-4">
+  //         <Spinner animation="border" variant="primary" />
+  //         <p className="mt-2 text-muted">Loading profile...</p>
+  //       </div>
+  //     </DashboardCard>
+  //   );
+  // }
+  if (profileLoading && !currentUser) {
     return (
       <DashboardCard title={title}>
         <div className="text-center py-4">
@@ -104,7 +125,14 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
     );
   }
 
-  if (profileError) {
+  // if (profileError) {
+  //   return (
+  //     <DashboardCard title={title}>
+  //       <Alert variant="danger">Error loading profile information</Alert>
+  //     </DashboardCard>
+  //   );
+  // }
+  if (profileError && !currentUser) {
     return (
       <DashboardCard title={title}>
         <Alert variant="danger">Error loading profile information</Alert>
@@ -120,8 +148,9 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
           <div className="position-relative d-inline-block">
             <UserAvatar
               user={{
-                photoURL: userProfile?.photoURL,
-                displayName: userProfile?.displayName,
+                photoURL: combinedUserData.photoURL,
+                displayName: combinedUserData.displayName,
+                useDefaultAvatar: combinedUserData.useDefaultAvatar,
               }}
               size="xl"
               className="mb-2 profile__image"
@@ -144,8 +173,8 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
             </Button>
           </div>
           
-          <h5 className="mb-1">{userProfile?.displayName || 'Unknown User'}</h5>
-          <p className="text-muted mb-2">{userProfile?.email}</p>
+          <h5 className="mb-1">{combinedUserData.displayName}</h5>
+          <p className="text-muted mb-2">{combinedUserData.email}</p>
           
           {/* Avatar Type Indicator */}
           <div className="small text-muted">
@@ -162,6 +191,7 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
             )}
           </div>
         </div>
+
 
         {showSuccess && (
           <Alert variant="success" className="mb-3">
@@ -291,9 +321,9 @@ const ProfileInformationCard = ({ title = "Profile Information" }) => {
         onHide={() => setShowAvatarModal(false)}
         userId={currentUser?.uid}
         currentUser={{
-          ...userProfile,
-          photoURL: userProfile?.photoURL,
-          displayName: userProfile?.displayName
+          ...combinedUserData,
+          photoURL: combinedUserData.photoURL,
+          displayName: combinedUserData.displayName
         }}
       />
     </>

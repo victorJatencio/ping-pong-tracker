@@ -12,6 +12,7 @@ const Profile = lazy(() => import('../pages/Profile'));
 const Login = lazy(() => import('../pages/Login'));
 const Register = lazy(() => import('../pages/Register'));
 const NotFound = lazy(() => import('../pages/NotFound'));
+const ForgotPassword = lazy(() => import('../pages/ForgotPassword'));
 
 const routes = [
   {
@@ -36,6 +37,7 @@ const routes = [
     children: [
       { path: 'login', element: <Login /> },
       { path: 'register', element: <Register /> },
+      { path: 'forgot-password', element: <ForgotPassword/>}
     ],
   },
   { path: '*', element: <NotFound /> },

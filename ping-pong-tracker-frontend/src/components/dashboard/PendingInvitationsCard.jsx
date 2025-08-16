@@ -5,6 +5,8 @@ import { useGetAllUsersQuery } from "../../store/slices/apiSlice";
 import DashboardCard from "../common/Card";
 import UserAvatar from "../../components/common/UserAvatar";
 import Modal from "../common/Modal";
+import CardMessage from "../../components/common/cardMessages";
+import { RiPingPongFill } from "react-icons/ri";
 
 // Firebase imports for real-time sync
 import {
@@ -500,10 +502,10 @@ const PendingInvitationsCard = () => {
           </div>
         ) : (
           <div className="no-invitations">
-            <p className="no-invitations-title">No Pending Invitations</p>
-            <p className="no-invitations-message">
-              You don't have any pending match invitations at the moment.
-            </p>
+            <CardMessage
+                icon= {<RiPingPongFill />}
+                text="You don't have any pending match invitations at the moment."
+            />
           </div>
         )}
       </DashboardCard>

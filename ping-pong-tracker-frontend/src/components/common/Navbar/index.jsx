@@ -73,10 +73,6 @@ const Navigation = () => {
                     <i className="bi bi-person-circle me-2"></i>
                     Profile
                   </Dropdown.Item>
-                  <Dropdown.Item as={Link} to="/settings">
-                    <i className="bi bi-gear me-2"></i>
-                    Settings
-                  </Dropdown.Item>
                   <Dropdown.Divider />
                   <Dropdown.Item onClick={handleLogout}>
                     <i className="bi bi-box-arrow-right me-2"></i>

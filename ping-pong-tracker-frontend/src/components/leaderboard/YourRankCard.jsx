@@ -4,6 +4,8 @@ import { Badge } from 'react-bootstrap';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useGetAllUsersQuery } from '../../store/slices/apiSlice';
 import DashboardCard from '../common/Card';
+import CardMessage from "../../components/common/cardMessages";
+import { RiPingPongFill } from "react-icons/ri";
 
 const YourRankCard = ({ title = "Your Rank" }) => {
   const { currentUser } = useContext(AuthContext);
@@ -152,8 +154,10 @@ const YourRankCard = ({ title = "Your Rank" }) => {
     return (
       <DashboardCard title={title}>
         <div className="text-center py-4">
-          <h3 className="text-muted mb-2">Unranked</h3>
-          <p className="text-muted mb-0">Play some matches to get ranked!</p>
+          <CardMessage
+                icon= {<RiPingPongFill />}
+                text="Play some matches to get ranked!"
+            />
         </div>
       </DashboardCard>
     );

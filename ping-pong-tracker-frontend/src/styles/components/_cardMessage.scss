@@ -1,0 +1,26 @@
+.pt__card-message {
+    font-size: 1rem;
+    color: $gray-600;
+}
+
+.pt__card-icon {
+    display: block;
+    margin-bottom: 20px;
+}
+.pt__card-icon > svg{
+    width: 2.5rem;
+    height: 2.5rem;
+    color: $gray-600;
+}
+
+[data-bs-theme="dark"] .pt__card-empty-message {
+
+    .pt__card-message {
+        color: $gray-400;
+    }
+
+    .pt__card-icon > svg {
+        color: $gray-400;
+    }
+
+}

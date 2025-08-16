@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { deleteUser } from "firebase/auth";
 import {
   getDocs,
   getDoc,
@@ -6,6 +7,7 @@ import {
   doc,
   updateDoc,
   collection,
+  writeBatch,
   query,
   where,
   orderBy,
@@ -1541,6 +1543,101 @@ export const apiSlice = createApi({
         { type: "User", id: "LIST" },
       ],
     }),
+
+    deleteUserData: builder.mutation({
+      queryFn: async (userId) => {
+        try {
+          console.log(
+            "🗑️ RTK Query: Starting Firestore data deletion for user:",
+            userId
+          );
+
+          // Create batch for atomic Firestore operations
+          const batch = writeBatch(db);
+
+          // Delete from users collection
+          const userRef = doc(db, "users", userId);
+          batch.delete(userRef);
+          console.log("📝 RTK Query: Queued user document for deletion");
+
+          // Delete from playerStats collection
+          const playerStatsRef = doc(db, "playerStats", userId);
+          batch.delete(playerStatsRef);
+          console.log("📊 RTK Query: Queued playerStats for deletion");
+
+          // Delete user's matches (where user is player1 or player2)
+          const matchesQuery1 = query(
+            collection(db, "matches"),
+            where("player1Id", "==", userId)
+          );
+          const matchesQuery2 = query(
+            collection(db, "matches"),
+            where("player2Id", "==", userId)
+          );
+
+          const [matches1Snapshot, matches2Snapshot] = await Promise.all([
+            getDocs(matchesQuery1),
+            getDocs(matchesQuery2),
+          ]);
+
+          matches1Snapshot.forEach((doc) => batch.delete(doc.ref));
+          matches2Snapshot.forEach((doc) => batch.delete(doc.ref));
+          console.log(
+            `🏓 RTK Query: Queued ${
+              matches1Snapshot.size + matches2Snapshot.size
+            } matches for deletion`
+          );
+
+          // Delete user's invitations (sent and received)
+          const invitationsQuery1 = query(
+            collection(db, "invitations"),
+            where("senderId", "==", userId)
+          );
+          const invitationsQuery2 = query(
+            collection(db, "invitations"),
+            where("recipientId", "==", userId)
+          );
+
+          const [invitations1Snapshot, invitations2Snapshot] =
+            await Promise.all([
+              getDocs(invitationsQuery1),
+              getDocs(invitationsQuery2),
+            ]);
+
+          invitations1Snapshot.forEach((doc) => batch.delete(doc.ref));
+          invitations2Snapshot.forEach((doc) => batch.delete(doc.ref));
+          console.log(
+            `📨 RTK Query: Queued ${
+              invitations1Snapshot.size + invitations2Snapshot.size
+            } invitations for deletion`
+          );
+
+          // Execute batch delete for all Firestore data
+          await batch.commit();
+          console.log("✅ RTK Query: All Firestore data deleted successfully");
+
+          return {
+            data: {
+              success: true,
+              message: "User data deleted successfully from Firestore",
+              deletedCollections: [
+                "users",
+                "playerStats",
+                "matches",
+                "invitations",
+              ],
+            },
+          };
+        } catch (error) {
+          console.error("❌ RTK Query: Error deleting user data:", error);
+          return {
+            error: { status: "FIRESTORE_DELETE_ERROR", error: error.message },
+          };
+        }
+      },
+      invalidatesTags: ["User", "PlayerStats", "Matches", "Invitations"],
+    }),
+
   }),
 });
 
@@ -1568,4 +1665,5 @@ export const {
   useGetUserProfileStatsQuery, // Delete
   useUploadProfileImageMutation,
   useRemoveProfileImageMutation,
+  useDeleteUserDataMutation
 } = apiSlice;

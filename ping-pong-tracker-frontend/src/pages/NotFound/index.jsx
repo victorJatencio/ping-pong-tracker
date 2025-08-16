@@ -1,9 +1,13 @@
 import React from 'react';
 import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
+import { useContext } from 'react';
+import { ThemeContext } from '../../contexts/ThemeContext';
 
 const NotFound = () => {
-  const { darkMode } = useTheme?.() || { darkMode: false }; // Use the theme if available
+  const themeContext = useContext(ThemeContext);
+  const darkMode = themeContext?.darkMode || false;
+  // const { darkMode } = ThemeProvider?.() || { darkMode: false }; // Use the theme if available
   
   return (
     <Container className="py-5">
@@ -42,13 +46,6 @@ const NotFound = () => {
                   size="lg"
                 >
                   Return to Dashboard
-                </Button>
-                <Button 
-                  as={Link} 
-                  to="/" 
-                  variant="outline-secondary"
-                >
-                  Go to Home
                 </Button>
               </div>
             </Card.Body>

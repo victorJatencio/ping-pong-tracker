@@ -11,18 +11,21 @@ import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { useDispatch } from "react-redux";
 import { apiSlice } from "../store/slices/apiSlice";
+import { deleteUser } from "firebase/auth";
+import { useDeleteUserDataMutation } from "../store/slices/apiSlice";
 
 // ✅ SIMPLE ERROR SUPPRESSION FOR LOGOUT
 const originalConsoleError = console.error;
 let isLoggingOutGlobal = false;
 
 console.error = (...args) => {
-  const errorMessage = args.join(' ');
-  if (isLoggingOutGlobal && (
-    errorMessage.includes('permission-denied') ||
-    errorMessage.includes('Missing or insufficient permissions') ||
-    errorMessage.includes('Uncaught Error in snapshot listener')
-  )) {
+  const errorMessage = args.join(" ");
+  if (
+    isLoggingOutGlobal &&
+    (errorMessage.includes("permission-denied") ||
+      errorMessage.includes("Missing or insufficient permissions") ||
+      errorMessage.includes("Uncaught Error in snapshot listener"))
+  ) {
     return; // Suppress Firebase permission errors during logout
   }
   originalConsoleError.apply(console, args);
@@ -36,6 +39,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [deleteUserData] = useDeleteUserDataMutation();
   const dispatch = useDispatch();
 
   // Add this ref to track mounted state
@@ -96,9 +100,39 @@ export const AuthProvider = ({ children }) => {
 
       return userCredential.user;
     } catch (error) {
-      console.error("AuthContext: Login failed:", error);
-      if (isMounted.current) setError(error.message);
-      throw error;
+      if (error.code === 'auth/invalid-credential') {
+        console.log("AuthContext: Invalid credentials provided"); // Less alarming log
+        const friendlyError = "Invalid email or password. Please check your credentials and try again.";
+
+        if (isMounted.current) setError(friendlyError);
+        throw new Error(friendlyError);
+
+      } else if (error.code === 'auth/user-not-found') {
+        console.log("AuthContext: User not found");
+        const friendlyError = "No account found with this email address.";
+        if (isMounted.current) setError(friendlyError);
+        throw new Error(friendlyError);
+
+      } else if (error.code === 'auth/wrong-password') {
+        console.log("AuthContext: Wrong password");
+        const friendlyError = "Incorrect password. Please try again.";
+        if (isMounted.current) setError(friendlyError);
+        throw new Error(friendlyError);
+
+      } else if (error.code === 'auth/too-many-requests') {
+        console.log("AuthContext: Too many failed attempts");
+        const friendlyError = "Too many failed login attempts. Please try again later.";
+        if (isMounted.current) setError(friendlyError);
+        throw new Error(friendlyError);
+
+      } else {
+        // For other errors, log them normally
+        console.error("AuthContext: Login failed:", error);
+        if (isMounted.current) setError(error.message);
+        throw error;
+      }
+      // if (isMounted.current) setError(error.message);
+      // throw error;
     }
   };
 
@@ -126,7 +160,9 @@ export const AuthProvider = ({ children }) => {
       // Sign out from Firebase
       await signOut(auth);
 
-      console.log("[" + new Date().toISOString() + "] User signed out successfully");
+      console.log(
+        "[" + new Date().toISOString() + "] User signed out successfully"
+      );
     } catch (error) {
       console.error(
         "[" + new Date().toISOString() + "] Error during logout:",
@@ -135,11 +171,59 @@ export const AuthProvider = ({ children }) => {
     } finally {
       if (isMounted.current) setLoading(false);
       setIsLoggingOut(false);
-      
+
       // Disable error suppression after logout
       setTimeout(() => {
         isLoggingOutGlobal = false;
       }, 1000);
+    }
+  };
+
+  // Delete Account
+  const deleteAccount = async () => {
+    if (!currentUser?.uid) {
+      throw new Error("No user logged in");
+    }
+
+    try {
+      console.log(
+        "🚀 AuthContext: Starting complete account deletion process..."
+      );
+      setLoading(true);
+
+      // 1. Delete Firestore data first
+      console.log("🗑️ AuthContext: Step 1 - Deleting Firestore data...");
+      const firestoreResult = await deleteUserData(currentUser.uid).unwrap();
+      console.log("✅ AuthContext: Firestore data deleted:", firestoreResult);
+
+      // 2. Re-authenticate and delete user (if needed)
+      console.log("🔥 AuthContext: Step 2 - Deleting Firebase Auth user...");
+
+      // Get fresh user reference
+      const user = auth.currentUser;
+      if (user) {
+        // Use the Firebase Auth deleteUser function
+        await user.delete(); // ✅ Alternative: Use user.delete() method
+        console.log("✅ AuthContext: Firebase Auth user deleted");
+      }
+
+      // 3. Clear local state
+      console.log("🧹 AuthContext: Step 3 - Clearing local data...");
+      setCurrentUser(null);
+      localStorage.clear();
+      sessionStorage.clear();
+
+      if (dispatch) {
+        dispatch(apiSlice.util.resetApiState());
+      }
+
+      console.log("🎉 AuthContext: Account deletion completed successfully!");
+      return { success: true, message: "Account deleted successfully" };
+    } catch (error) {
+      console.error("❌ AuthContext: Error in deleteAccount:", error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -309,6 +393,7 @@ export const AuthProvider = ({ children }) => {
     register,
     login,
     logout,
+    deleteAccount,
     resetPassword,
     updateUserProfile,
     isAuthenticated,
@@ -322,4 +407,3 @@ export const AuthProvider = ({ children }) => {
 };
 
 export default AuthProvider;
-

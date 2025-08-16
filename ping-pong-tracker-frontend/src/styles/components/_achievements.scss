@@ -6,11 +6,6 @@
     flex-wrap: wrap;
     justify-content: space-between;
     gap: 1rem;
-    // padding: 1rem 0;
-
-    @media (max-width: 768px) {
-      
-    }
   }
 
   .achievement-item {
@@ -19,8 +14,6 @@
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    // padding: 1rem;
-    // background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
 
     @media (max-width: 768px) {
       justify-content: center;
@@ -32,8 +25,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 90px;
-    height: 90px;
+    // width: 90px;
+    // height: 90px;
     border-radius: 50%;
     font-size: 1.5rem;
     color: white;
@@ -42,6 +35,18 @@
     img.bi-trophy-fill {
         width: 90px;
         border-radius: 50px;
+        @media (max-width: 1399px) {
+          width: 60px;
+          height: 60px;
+        }
+        @media (max-width: 990px) {
+          width: 80px;
+          height: 80px;
+        }
+        @media (max-width: 768px) {
+          width: 80px;
+          height: 80px;
+        }
     }
 
     &.trophy {
