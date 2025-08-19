@@ -4,13 +4,14 @@ const logger = require("../../utils/logger");
 
 const router = express.Router();
 
+
 /**
  * Get player statistics
  * GET /api/stats/player/:playerId
  */
 router.get("/player/:playerId", async (req, res) => {
   try {
-    const { playerId } = req.params;
+    const {playerId} = req.params;
 
     if (!playerId) {
       return res.status(400).json({
@@ -63,12 +64,40 @@ router.get("/leaderboard/preview", async (req, res) => {
 });
 
 /**
+ * Get all player statistics
+ * GET /api/stats/players
+ */
+router.get("/players", async (req, res) => {
+  try {
+    logger.info("All player stats requested");
+
+    const allStats = await statsService.getAllPlayerStats();
+
+    res.json({
+      success: true,
+      data: allStats,
+      meta: {
+        count: allStats.length,
+        type: "all_players"
+      }
+    });
+  } catch (error) {
+    logger.error("Error getting all player stats:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to get all player statistics"
+    });
+  }
+});
+
+
+/**
  * Sync player statistics
  * POST /api/stats/player/:playerId/sync
  */
 router.post("/player/:playerId/sync", async (req, res) => {
   try {
-    const { playerId } = req.params;
+    const {playerId} = req.params;
 
     if (!playerId) {
       return res.status(400).json({
@@ -117,5 +146,7 @@ router.post("/sync-all", async (req, res) => {
     });
   }
 });
+
+
 
 module.exports = router;

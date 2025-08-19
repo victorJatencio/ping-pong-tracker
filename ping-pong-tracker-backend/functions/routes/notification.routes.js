@@ -1,9 +1,9 @@
-const express = require('express');
-const { authenticate, userRateLimit } = require('../middlewares/auth.middleware');
-const { validateRequest } = require('../middlewares/validation.middleware');
-const { asyncErrorHandler } = require('../middlewares/error.middleware');
-const notificationController = require('../controllers/notification.controller');
-const { notificationSchemas } = require('../../utils/validation');
+const express = require("express");
+const {authenticate, userRateLimit} = require("../middlewares/auth.middleware");
+const {validateRequest} = require("../middlewares/validation.middleware");
+const {asyncErrorHandler} = require("../middlewares/error.middleware");
+const notificationController = require("../controllers/notification.controller");
+const {notificationSchemas} = require("../../utils/validation");
 
 const router = express.Router();
 
@@ -12,10 +12,10 @@ const router = express.Router();
  * @desc    Get user notifications (paginated)
  * @access  Private
  */
-router.get('/',
+router.get("/",
     authenticate,
-    validateRequest(notificationSchemas.queryNotifications, 'query'),
-    asyncErrorHandler(notificationController.getNotifications)
+    validateRequest(notificationSchemas.queryNotifications, "query"),
+    asyncErrorHandler(notificationController.getNotifications),
 );
 
 /**
@@ -23,11 +23,11 @@ router.get('/',
  * @desc    Create a new notification
  * @access  Private
  */
-router.post('/',
+router.post("/",
     authenticate,
     userRateLimit(20, 60000), // 20 notifications per minute
     validateRequest(notificationSchemas.createNotification),
-    asyncErrorHandler(notificationController.createNotification)
+    asyncErrorHandler(notificationController.createNotification),
 );
 
 /**
@@ -35,9 +35,9 @@ router.post('/',
  * @desc    Get count of unread notifications
  * @access  Private
  */
-router.get('/unread-count',
+router.get("/unread-count",
     authenticate,
-    asyncErrorHandler(notificationController.getUnreadCount)
+    asyncErrorHandler(notificationController.getUnreadCount),
 );
 
 /**
@@ -45,9 +45,9 @@ router.get('/unread-count',
  * @desc    Mark notification as read
  * @access  Private
  */
-router.put('/:notificationId/read',
+router.put("/:notificationId/read",
     authenticate,
-    asyncErrorHandler(notificationController.markAsRead)
+    asyncErrorHandler(notificationController.markAsRead),
 );
 
 /**
@@ -55,9 +55,9 @@ router.put('/:notificationId/read',
  * @desc    Mark all notifications as read
  * @access  Private
  */
-router.put('/mark-all-read',
+router.put("/mark-all-read",
     authenticate,
-    asyncErrorHandler(notificationController.markAllAsRead)
+    asyncErrorHandler(notificationController.markAllAsRead),
 );
 
 /**
@@ -65,9 +65,9 @@ router.put('/mark-all-read',
  * @desc    Delete a notification
  * @access  Private
  */
-router.delete('/:notificationId',
+router.delete("/:notificationId",
     authenticate,
-    asyncErrorHandler(notificationController.deleteNotification)
+    asyncErrorHandler(notificationController.deleteNotification),
 );
 
 /**
@@ -75,11 +75,11 @@ router.delete('/:notificationId',
  * @desc    Send match invitation notification
  * @access  Private
  */
-router.post('/match-invitation',
+router.post("/match-invitation",
     authenticate,
     userRateLimit(10, 60000), // 10 invitations per minute
     validateRequest(notificationSchemas.matchInvitation),
-    asyncErrorHandler(notificationController.sendMatchInvitation)
+    asyncErrorHandler(notificationController.sendMatchInvitation),
 );
 
 /**
@@ -87,10 +87,10 @@ router.post('/match-invitation',
  * @desc    Send match update notification
  * @access  Private
  */
-router.post('/match-update',
+router.post("/match-update",
     authenticate,
     validateRequest(notificationSchemas.matchUpdate),
-    asyncErrorHandler(notificationController.sendMatchUpdate)
+    asyncErrorHandler(notificationController.sendMatchUpdate),
 );
 
 /**
@@ -98,9 +98,9 @@ router.post('/match-update',
  * @desc    Get user notification preferences
  * @access  Private
  */
-router.get('/preferences',
+router.get("/preferences",
     authenticate,
-    asyncErrorHandler(notificationController.getNotificationPreferences)
+    asyncErrorHandler(notificationController.getNotificationPreferences),
 );
 
 /**
@@ -108,10 +108,10 @@ router.get('/preferences',
  * @desc    Update user notification preferences
  * @access  Private
  */
-router.put('/preferences',
+router.put("/preferences",
     authenticate,
     validateRequest(notificationSchemas.updatePreferences),
-    asyncErrorHandler(notificationController.updateNotificationPreferences)
+    asyncErrorHandler(notificationController.updateNotificationPreferences),
 );
 
 module.exports = router;

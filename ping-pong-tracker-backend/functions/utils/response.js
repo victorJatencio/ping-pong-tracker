@@ -39,7 +39,7 @@ const responseHandler = {
             endpoint: res.req.originalUrl,
             method: res.req.method,
             statusCode,
-            userId: res.req.user?.uid || 'anonymous'
+            userId: (res.req.user && res.req.user.uid) || 'anonymous'
         });
         
         return res.status(statusCode).json(response);

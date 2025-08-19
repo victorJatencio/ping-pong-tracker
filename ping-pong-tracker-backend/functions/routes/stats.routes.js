@@ -10,7 +10,7 @@ const router = express.Router();
  */
 router.get("/player/:playerId", async (req, res) => {
   try {
-    const { playerId } = req.params;
+    const {playerId} = req.params;
 
     if (!playerId) {
       return res.status(400).json({
@@ -68,7 +68,7 @@ router.get("/leaderboard/preview", async (req, res) => {
  */
 router.post("/player/:playerId/sync", async (req, res) => {
   try {
-    const { playerId } = req.params;
+    const {playerId} = req.params;
 
     if (!playerId) {
       return res.status(400).json({
